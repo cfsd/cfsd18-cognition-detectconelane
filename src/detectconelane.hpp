@@ -17,56 +17,51 @@
  * USA.
  */
 
-#ifndef OPENDLV_SIM_CFSD18_COGNITION_BLACKBOX_HPP
-#define OPENDLV_SIM_CFSD18_COGNITION_BLACKBOX_HPP
+#ifndef OPENDLV_LOGIC_CFSD18_PERCEPTION_DETECTCONELANE_HPP
+#define OPENDLV_LOGIC_CFSD18_PERCEPTION_DETECTCONELANE_HPP
 
-#include <opendlv-standard-message-set.hpp>
-#include <cluon-complete.hpp>
-#include <Eigen/Dense>
+#include <opendavinci/odcore/base/module/DataTriggeredConferenceClientModule.h>
+#include <opendavinci/odcore/data/Container.h>
+
+#include <odvdopendlvstandardmessageset/GeneratedHeaders_ODVDOpenDLVStandardMessageSet.h>
+#include <opendavinci/odcore/wrapper/Eigen.h>
 #include <fstream>
 #include <iostream>
 #include <thread>
 #include <cmath>
-#include <iomanip>
-#include <sstream>
-#include <list>
-#include <vector>
-#include <algorithm>
-#include <string>
-#include "neat/neat.h"
-#include "neat/network.h"
-#include "neat/population.h"
-#include "neat/organism.h"
-#include "neat/genome.h"
-#include "neat/species.h"
+#include <map>
+#include <chrono>
+#include <mutex>
+#include <condition_variable>
+#include <opendavinci/odcore/data/TimeStamp.h>
+#include <opendavinci/odcore/base/Lock.h>
+//#include <odvdcfsd18/GeneratedHeaders_ODVDcfsd18.h>
+//#include <odvdcfsd18/GeneratedHeaders_ODVDcfsd18.h>
 
-class BlackBox {
+
+namespace opendlv {
+namespace logic {
+namespace cfsd18 {
+namespace perception {
+
+class DetectConeLane : public odcore::base::module::DataTriggeredConferenceClientModule {
  public:
-  BlackBox(std::map<std::string, std::string>);
-  BlackBox(BlackBox const &) = delete;
-  BlackBox &operator=(BlackBox const &) = delete;
-  virtual ~BlackBox();
-  virtual void nextContainer(cluon::data::Envelope &);
+  DetectConeLane(int32_t const &, char **);
+  DetectConeLane(DetectConeLane const &) = delete;
+  DetectConeLane &operator=(DetectConeLane const &) = delete;
+  virtual ~DetectConeLane();
+  virtual void nextContainer(odcore::data::Container &);
 
  private:
   void setUp();
   void tearDown();
 
   void initializeCollection();
-  void sortIntoSideArrays(Eigen::MatrixXd, int, int, int, int);
-  void generateSurfaces(Eigen::ArrayXXf, Eigen::ArrayXXf);
+  void generateSurfaces(ArrayXXf, ArrayXXf, ArrayXXf);
+  //void CheckContainer(uint32_t);
   Eigen::MatrixXd Spherical2Cartesian(double, double, double);
 
-  std::mutex m_stateMutex;
-  uint16_t m_cid;
-  float m_maxSteering;
-  float m_maxAcceleration;
-  float m_maxDeceleration;
-  float m_receiveTimeLimit;
-  float m_vx;
-  float m_vy;
-  float m_yawRate;
-  NEAT::Network *m_net;
+
   bool m_newFrame;
   bool m_directionOK;
   bool m_distanceOK;
@@ -91,14 +86,32 @@ class BlackBox {
   int m_directionId;
   int m_distanceId;
   int m_typeId;
-  std::mutex m_directionMutex = {};
-  std::mutex m_distanceMutex = {};
-  std::mutex m_typeMutex = {};
+  odcore::base::Mutex m_directionMutex = {};
+  odcore::base::Mutex m_distanceMutex = {};
+  odcore::base::Mutex m_typeMutex = {};
   int m_surfaceId;
+
 
   const double DEG2RAD = 0.017453292522222; // PI/180.0
 
+  void findSafeLocalPath(ArrayXXf, ArrayXXf);
+  ArrayXXf placeEquidistantPoints(ArrayXXf, bool, int, float);
+  ArrayXXf traceBackToClosestPoint(ArrayXXf, ArrayXXf, ArrayXXf);
+  ArrayXXf orderCones(ArrayXXf, ArrayXXf);
+  ArrayXXf orderAndFilterCones(ArrayXXf, ArrayXXf);
+  ArrayXXf insertNeededGuessedCones(ArrayXXf, ArrayXXf, ArrayXXf, float, float, bool);
+  ArrayXXf guessCones(ArrayXXf, ArrayXXf, float, bool, bool, bool);
+  float findTotalPathLength(ArrayXXf);
+  float findFactorToClosestPoint(ArrayXXf, ArrayXXf, ArrayXXf);
+
+  void sortIntoSideArrays(MatrixXd, int, int, int, int);
+  void sendMatchedContainer(Eigen::ArrayXXf, Eigen::ArrayXXf);
+
 };
 
+}
+}
+}
+}
 
 #endif
