@@ -21,22 +21,17 @@
 #include <cstdlib>
 #include <mutex>
 #include <condition_variable>
-
-
-#include <opendavinci/odcore/data/TimeStamp.h>
-#include <opendavinci/odcore/strings/StringToolbox.h>
-#include <opendavinci/odcore/wrapper/Eigen.h>
-
 #include "detectconelane.hpp"
 
-namespace opendlv {
-namespace logic {
-namespace cfsd18 {
-namespace perception {
-
-DetectConeLane::DetectConeLane(int32_t const &a_argc, char **a_argv) :
-  DataTriggeredConferenceClientModule(a_argc, a_argv, "logic-cfsd18-perception-detectconelane")
-, m_newFrame{true}
+DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments) :
+  m_stateMutex()
+// TODO: Fix commandlineArguments for all the configuration stuff
+, m_cid{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))}
+, m_maxSteering{(commandlineArguments["maxSteering"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxSteering"]))) : (25.0f)}
+, m_maxAcceleration{(commandlineArguments["maxAcceleration"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxAcceleration"]))) : (5.0f)}
+, m_maxDeceleration{(commandlineArguments["maxDeceleration"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxDeceleration"]))) : (5.0f)}
+, m_receiveTimeLimit{(commandlineArguments["receiveTimeLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["receiveTimeLimit"]))) : (0.0001f)}
+,  m_newFrame{true}
 , m_directionOK{false}
 , m_distanceOK {false}
 , m_runOK{true}
@@ -78,13 +73,13 @@ void DetectConeLane::tearDown()
 }
 
 
-void DetectConeLane::nextContainer(odcore::data::Container &a_container)
+void DetectConeLane::nextContainer(cluon::data::Envelope &a_container)
 {
-if(a_container.getDataType() == opendlv::logic::perception::ObjectProperty::ID()){
+if(a_container.dataType() == opendlv::logic::perception::ObjectProperty::ID()){
     //std::cout << "RECIEVED AN OBJECTPROPERY!" << std::endl;
-    auto object = a_container.getData<opendlv::logic::perception::ObjectProperty>();
-    int objectId = object.getObjectId();
-    auto nConesInFrame = object.getProperty();
+    auto object = cluon::extractMessage<opendlv::logic::perception::ObjectProperty>(std::move(a_container));
+    int objectId = object.objectId();
+    auto nConesInFrame = object.property();
 
     if (m_newFrame) { // If true, a frame has just been sent for processing
       m_newFrame = false;
@@ -94,21 +89,21 @@ if(a_container.getDataType() == opendlv::logic::perception::ObjectProperty::ID()
     }
 }
 
-if (a_container.getDataType() == opendlv::logic::perception::ObjectDirection::ID()) {
+if (a_container.dataType() == opendlv::logic::perception::ObjectDirection::ID()) {
     int objectId;
     {
-      odcore::base::Lock lockDirection(m_directionMutex);
-      auto object = a_container.getData<opendlv::logic::perception::ObjectDirection>();
-      objectId = object.getObjectId();
-      odcore::data::TimeStamp containerStamp = a_container.getReceivedTimeStamp();
-      double timeStamp = containerStamp.toMicroseconds(); // Save timeStamp for sorting purposes;
+      std::unique_lock<std::mutex> lockDirection(m_directionMutex);
+      auto object = cluon::extractMessage<opendlv::logic::perception::ObjectDirection>(std::move(a_container));
+      objectId = object.objectId();
+      cluon::data::TimeStamp containerStamp = a_container.sampleTimeStamp();
+      double timeStamp = containerStamp.microseconds(); // Save timeStamp for sorting purposes;
 
         if (m_newDirectionId) {
           m_directionId = (objectId!=m_lastDirectionId)?(objectId):(-1); // Update object id if it is not remains from an already run frame
           m_newDirectionId=(m_directionId !=-1)?(false):(true); // Set new id to false while collecting current frame id, or keep as true if current id is from an already run frame
         }
 
-        float angle = object.getAzimuthAngle(); //Unpack message
+        float angle = object.azimuthAngle(); //Unpack message
 
         if (objectId == m_directionId) {
           m_directionFrame[timeStamp] = angle;
@@ -120,14 +115,13 @@ if (a_container.getDataType() == opendlv::logic::perception::ObjectDirection::ID
     auto wait = std::chrono::system_clock::now(); // Time point now
     std::chrono::duration<double> dur = wait-m_directionTimeReceived; // Duration since last message recieved to m_surfaceFrame
     double duration = (m_directionId!=-1)?(dur.count()):(-1.0); // Duration value of type double in seconds OR -1 which prevents running the surface while ignoring messages from an already run frame
-    double receiveTimeLimit = getKeyValueConfiguration().getValue<float>("logic-cfsd18-perception-detectconelane.receiveTimeLimit");
-    if ((duration>receiveTimeLimit) && (m_nConesInFrame>m_directionFrame.size())) { //Only for debug
+    if ((duration>m_receiveTimeLimit) && (m_nConesInFrame>m_directionFrame.size())) { //Only for debug
       std::cout<<"DURATION TIME DIRECTION EXCEEDED: "<<duration<<std::endl;
       std::cout<<m_directionFrame.size()<<" directionFrames to run"<<"\n";
       std::cout<<m_nConesInFrame<<" frames to run"<<"\n";
     }
     // Run if frame is full or if we have waited to long for the remaining messages
-    if ((m_directionFrame.size()==m_nConesInFrame || duration>receiveTimeLimit)) { //!m_newFrame && objectId==m_surfaceId &&
+    if ((m_directionFrame.size()==m_nConesInFrame || duration>m_receiveTimeLimit)) { //!m_newFrame && objectId==m_surfaceId &&
       m_directionOK=true;
       //std::cout<<m_directionFrame.size()<<" directionFrames to run"<<"\n";
       //std::cout<<m_directionFrameBuffer.size()<<" directionFrames in buffer"<<"\n";
@@ -135,21 +129,21 @@ if (a_container.getDataType() == opendlv::logic::perception::ObjectDirection::ID
     }
 }
 
-else if(a_container.getDataType() == opendlv::logic::perception::ObjectDistance::ID()){
+else if(a_container.dataType() == opendlv::logic::perception::ObjectDistance::ID()){
   int objectId;
   {
-    odcore::base::Lock lockDistance(m_distanceMutex);
-    auto object = a_container.getData<opendlv::logic::perception::ObjectDistance>();
-    objectId = object.getObjectId();
-    odcore::data::TimeStamp containerStamp = a_container.getReceivedTimeStamp();
-    double timeStamp = containerStamp.toMicroseconds(); // Save timeStamp for sorting purposes;
+    std::unique_lock<std::mutex> lockDistance(m_distanceMutex);
+    auto object = cluon::extractMessage<opendlv::logic::perception::ObjectDistance>(std::move(a_container));
+    objectId = object.objectId();
+    cluon::data::TimeStamp containerStamp = a_container.sampleTimeStamp();
+    double timeStamp = containerStamp.microseconds(); // Save timeStamp for sorting purposes;
 
     if (m_newDistanceId) {
       m_distanceId = (objectId!=m_lastDistanceId)?(objectId):(-1); // Update object id if it is not remains from an already run frame
       m_newDistanceId=(m_distanceId !=-1)?(false):(true); // Set new id to false while collecting current frame id, or keep as true if current id is from an already run frame
     }
 
-    float distance = object.getDistance(); //Unpack message
+    float distance = object.distance(); //Unpack message
 
     if (objectId == m_distanceId) {
       m_distanceFrame[timeStamp] = distance;
@@ -161,8 +155,7 @@ else if(a_container.getDataType() == opendlv::logic::perception::ObjectDistance:
   auto wait = std::chrono::system_clock::now(); // Time point now
   std::chrono::duration<double> dur = wait-m_distanceTimeReceived; // Duration since last message recieved to m_surfaceFrame
   double duration = (m_distanceId!=-1)?(dur.count()):(-1.0); // Duration value of type double in seconds OR -1 which prevents running the surface while ignoring messages from an already run frame
-  double receiveTimeLimit = getKeyValueConfiguration().getValue<float>("logic-cfsd18-perception-detectconelane.receiveTimeLimit");
-  if ((duration>receiveTimeLimit)&& (m_nConesInFrame>m_distanceFrame.size())) { //Only for debug
+  if ((duration>m_receiveTimeLimit)&& (m_nConesInFrame>m_distanceFrame.size())) { //Only for debug
     std::cout<<"DURATION TIME DISTANCE EXCEEDED: "<<duration<<std::endl;
     std::cout<<m_distanceFrame.size()<<" distanceFrames to run"<<"\n";
     std::cout<<m_nConesInFrame<<" frames to run"<<"\n";
@@ -176,21 +169,21 @@ else if(a_container.getDataType() == opendlv::logic::perception::ObjectDistance:
   }
 }
 
-  else if(a_container.getDataType() == opendlv::logic::perception::ObjectType::ID()){
+  else if(a_container.dataType() == opendlv::logic::perception::ObjectType::ID()){
     int objectId;
     {
-      odcore::base::Lock lockType(m_typeMutex);
-      auto object = a_container.getData<opendlv::logic::perception::ObjectType>();
-      objectId = object.getObjectId();
-      odcore::data::TimeStamp containerStamp = a_container.getReceivedTimeStamp();
-      double timeStamp = containerStamp.toMicroseconds(); // Save timeStamp for sorting purposes;
+      std::unique_lock<std::mutex> lockType(m_typeMutex);
+      auto object = cluon::extractMessage<opendlv::logic::perception::ObjectType>(std::move(a_container));
+      objectId = object.objectId();
+      cluon::data::TimeStamp containerStamp = a_container.sampleTimeStamp();
+      double timeStamp = containerStamp.microseconds(); // Save timeStamp for sorting purposes;
 
       if (m_newTypeId) {
         m_typeId = (objectId!=m_lastTypeId)?(objectId):(-1); // Update object id if it is not remains from an already run frame
         m_newTypeId=(m_typeId !=-1)?(false):(true); // Set new id to false while collecting current frame id, or keep as true if current id is from an already run frame
       }
 
-      int type = object.getType(); //Unpack message
+      int type = object.type(); //Unpack message
 
       if (objectId == m_typeId) {
         m_typeFrame[timeStamp] = type;
@@ -202,14 +195,13 @@ else if(a_container.getDataType() == opendlv::logic::perception::ObjectDistance:
     auto wait = std::chrono::system_clock::now(); // Time point now
     std::chrono::duration<double> dur = wait-m_typeTimeReceived; // Duration since last message recieved to m_surfaceFrame
     double duration = (m_typeId!=-1)?(dur.count()):(-1.0); // Duration value of type double in seconds OR -1 which prevents running the surface while ignoring messages from an already run frame
-    double receiveTimeLimit = getKeyValueConfiguration().getValue<float>("logic-cfsd18-perception-detectconelane.receiveTimeLimit");
-    if ((duration>receiveTimeLimit) && (m_nConesInFrame>m_typeFrame.size())) { //Only for debug
+    if ((duration>m_receiveTimeLimit) && (m_nConesInFrame>m_typeFrame.size())) { //Only for debug
       std::cout<<"DURATION TIME TYPE EXCEEDED: "<<duration<<std::endl;
       std::cout<<m_typeFrame.size()<<" typeFrames to run"<<"\n";
       std::cout<<m_nConesInFrame<<" frames to run"<<"\n";
     }
     // Run if frame is full or if we have waited to long for the remaining messages
-    if ((m_typeFrame.size()==m_nConesInFrame || duration>receiveTimeLimit) && m_runOK) { //!m_newFrame && objectId==m_surfaceId &&
+    if ((m_typeFrame.size()==m_nConesInFrame || duration>m_receiveTimeLimit) && m_runOK) { //!m_newFrame && objectId==m_surfaceId &&
       if (m_directionOK && m_distanceOK) {
         m_runOK = false;
         //std::cout<<"m_runOK"<<std::endl;
@@ -231,9 +223,9 @@ void DetectConeLane::initializeCollection(){
 
   if (m_directionFrame.size() == m_distanceFrame.size() && m_directionFrame.size() == m_typeFrame.size()) {
     {
-      odcore::base::Lock lockDirection(m_directionMutex);
-      odcore::base::Lock lockDistance(m_distanceMutex);
-      odcore::base::Lock lockType(m_typeMutex);
+      std::unique_lock<std::mutex> lockDirection(m_directionMutex);
+      std::unique_lock<std::mutex> lockDistance(m_distanceMutex);
+      std::unique_lock<std::mutex> lockType(m_typeMutex);
       m_newFrame = true;
       m_directionOK = false;
       m_distanceOK = false;
@@ -256,9 +248,9 @@ void DetectConeLane::initializeCollection(){
   }
   else {
     {
-      odcore::base::Lock lockDirection(m_directionMutex);
-      odcore::base::Lock lockDistance(m_distanceMutex);
-      odcore::base::Lock lockType(m_typeMutex);
+      std::unique_lock<std::mutex> lockDirection(m_directionMutex);
+      std::unique_lock<std::mutex> lockDistance(m_distanceMutex);
+      std::unique_lock<std::mutex> lockType(m_typeMutex);
       m_newFrame = true;
       m_directionOK = false;
       m_distanceOK = false;
@@ -335,13 +327,76 @@ void DetectConeLane::initializeCollection(){
   m_runOK = true;
 } // End of initializeCollection
 
-void DetectConeLane::generateSurfaces(ArrayXXf sideLeft, ArrayXXf sideRight, ArrayXXf location){
+
+void DetectConeLane::sortIntoSideArrays(Eigen::MatrixXd extractedCones, int nLeft, int nRight, int nSmall, int nBig)
+{
+  int coneNum = extractedCones.cols();
+  //Convert to cartesian
+  Eigen::MatrixXd cone;
+  Eigen::MatrixXd coneLocal = Eigen::MatrixXd::Zero(2,coneNum);
+
+  for(int p = 0; p < coneNum; p++)
+  {
+    cone = DetectConeLane::Spherical2Cartesian(extractedCones(0,p), 0.0, extractedCones(1,p));
+    coneLocal.col(p) = cone;
+  } // End of for
+//std::cout << "ConeLocal: " << coneLocal.transpose() << std::endl;
+
+  Eigen::MatrixXd coneLeft = Eigen::MatrixXd::Zero(2,nLeft);
+  Eigen::MatrixXd coneRight = Eigen::MatrixXd::Zero(2,nRight);
+  Eigen::MatrixXd coneSmall = Eigen::MatrixXd::Zero(2,nSmall);
+  Eigen::MatrixXd coneBig = Eigen::MatrixXd::Zero(2,nBig);
+  int a = 0;
+  int b = 0;
+  int c = 0;
+  int d = 0;
+  int type;
+
+  for(int k = 0; k < coneNum; k++){
+    type = static_cast<int>(extractedCones(2,k));
+    if(type == 1)
+    {
+      coneLeft.col(a) = coneLocal.col(k);
+      a++;
+    }
+    else if(type == 2)
+    {
+      coneRight.col(b) = coneLocal.col(k);
+      b++;
+    }
+    else if(type == 3)
+    {
+      coneSmall.col(c) = coneLocal.col(k);
+      c++;
+    }
+    else if(type == 4)
+    {
+      coneBig.col(d) = coneLocal.col(k);
+      d++;
+    } // End of else
+  } // End of for
+
+
+  Eigen::ArrayXXf location(1,2);
+  location << -3,0;
+
+  Eigen::MatrixXf coneLeft_f = coneLeft.cast <float> ();
+  Eigen::MatrixXf coneRight_f = coneRight.cast <float> ();
+  Eigen::ArrayXXf sideLeft = coneLeft_f.transpose().array();
+  Eigen::ArrayXXf sideRight = coneRight_f.transpose().array();
+
+  DetectConeLane::generateSurfaces(sideLeft, sideRight, location);
+} // End of sortIntoSideArrays
+
+
+void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf sideRight, Eigen::ArrayXXf location){
+// TODO: Fix commandlineArguments for all the configuration stuff
   auto kv = getKeyValueConfiguration();
   float const coneWidthSeparationThreshold = kv.getValue<float>("logic-cfsd18-perception-detectconelane.coneWidthSeparationThreshold");
   float const guessDistance = kv.getValue<float>("logic-cfsd18-perception-detectconelane.guessDistance");
   bool const fakeSlamActivated = kv.getValue<bool>("logic-cfsd18-perception-detectconelane.fakeSlamActivated");
-  ArrayXXf orderedConesLeft;
-  ArrayXXf orderedConesRight;
+  Eigen::ArrayXXf orderedConesLeft;
+  Eigen::ArrayXXf orderedConesRight;
   if (!fakeSlamActivated) {
     orderedConesLeft = DetectConeLane::orderAndFilterCones(sideLeft,location);
     orderedConesRight = DetectConeLane::orderAndFilterCones(sideRight,location);
@@ -354,8 +409,8 @@ void DetectConeLane::generateSurfaces(ArrayXXf sideLeft, ArrayXXf sideRight, Arr
   float pathLengthLeft = DetectConeLane::findTotalPathLength(orderedConesLeft);
   float pathLengthRight = DetectConeLane::findTotalPathLength(orderedConesRight);
 
-  ArrayXXf longSide;
-  ArrayXXf shortSide;
+  Eigen::ArrayXXf longSide;
+  Eigen::ArrayXXf shortSide;
   bool leftIsLong;
 
   if (std::abs(pathLengthLeft-pathLengthRight) > 0.01f) {
@@ -366,8 +421,8 @@ void DetectConeLane::generateSurfaces(ArrayXXf sideLeft, ArrayXXf sideRight, Arr
 
   if(leftIsLong)
   {
-    ArrayXXf tmpLongSide = orderedConesLeft;
-    ArrayXXf tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesLeft, orderedConesRight, location, coneWidthSeparationThreshold,  guessDistance, false);
+    Eigen::ArrayXXf tmpLongSide = orderedConesLeft;
+    Eigen::ArrayXXf tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesLeft, orderedConesRight, location, coneWidthSeparationThreshold,  guessDistance, false);
 
     longSide.resize(tmpLongSide.rows(),tmpLongSide.cols());
     longSide = tmpLongSide;
@@ -377,8 +432,8 @@ void DetectConeLane::generateSurfaces(ArrayXXf sideLeft, ArrayXXf sideRight, Arr
   }
   else
   {
-    ArrayXXf tmpLongSide = orderedConesRight;
-    ArrayXXf tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesRight, orderedConesLeft, location, coneWidthSeparationThreshold,  guessDistance, true);
+    Eigen::ArrayXXf tmpLongSide = orderedConesRight;
+    Eigen::ArrayXXf tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesRight, orderedConesLeft, location, coneWidthSeparationThreshold,  guessDistance, true);
 
     longSide.resize(tmpLongSide.rows(),tmpLongSide.cols());
     longSide = tmpLongSide;
@@ -400,6 +455,7 @@ void DetectConeLane::generateSurfaces(ArrayXXf sideLeft, ArrayXXf sideRight, Arr
     if(longSide.rows() == 0)
     { std::cout<<"No Cones"<<"\n";
       //No cones
+//TODO: Fix sending messages with libcluon od4session
       opendlv::logic::perception::GroundSurfaceProperty surface;
       surface.setSurfaceId(m_surfaceId);
       surface.setProperty("1");
@@ -502,9 +558,9 @@ Eigen::MatrixXd DetectConeLane::Spherical2Cartesian(double azimuth, double zenim
 } // End of Spherical2Cartesian
 
 
-void DetectConeLane::findSafeLocalPath(ArrayXXf sidePointsLeft, ArrayXXf sidePointsRight)
+void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::ArrayXXf sidePointsRight)
 {
-  ArrayXXf longSide, shortSide;
+  Eigen::ArrayXXf longSide, shortSide;
 
   // Identify the longest side
   float pathLengthLeft = DetectConeLane::findTotalPathLength(sidePointsLeft);
@@ -524,8 +580,8 @@ void DetectConeLane::findSafeLocalPath(ArrayXXf sidePointsLeft, ArrayXXf sidePoi
   int nConesShort = shortSide.rows();
 
   // Divide the longest side into segments of equal length
-  ArrayXXf virtualPointsLong = DetectConeLane::placeEquidistantPoints(longSide,true,nMidPoints,-1);
-  ArrayXXf virtualPointsShort(nMidPoints,2);
+  Eigen::ArrayXXf virtualPointsLong = DetectConeLane::placeEquidistantPoints(longSide,true,nMidPoints,-1);
+  Eigen::ArrayXXf virtualPointsShort(nMidPoints,2);
 
   float shortestDist, tmpDist, factor;
   int closestConeIndex;
@@ -598,7 +654,7 @@ void DetectConeLane::findSafeLocalPath(ArrayXXf sidePointsLeft, ArrayXXf sidePoi
     } // End of else
   } // End of for
 
-  ArrayXXf virtualPointsLongFinal, virtualPointsShortFinal;
+  Eigen::ArrayXXf virtualPointsLongFinal, virtualPointsShortFinal;
   if(virtualPointsLong.rows() % 2 == 0)
   {
     // Number of points is even. Accepted.
@@ -617,7 +673,7 @@ void DetectConeLane::findSafeLocalPath(ArrayXXf sidePointsLeft, ArrayXXf sidePoi
     virtualPointsLongFinal.topRows(nLong) = virtualPointsLong;
     virtualPointsShortFinal.topRows(nShort) = virtualPointsShort;
 
-    ArrayXXf lastVecLong = virtualPointsLong.row(nLong-1)-virtualPointsLong.row(nLong-2);
+    Eigen::ArrayXXf lastVecLong = virtualPointsLong.row(nLong-1)-virtualPointsLong.row(nLong-2);
     lastVecLong = lastVecLong / ((lastVecLong.matrix()).norm());
 
     virtualPointsLongFinal.bottomRows(1) = virtualPointsLong.row(nLong-1) + 0.01*lastVecLong;
@@ -629,7 +685,7 @@ void DetectConeLane::findSafeLocalPath(ArrayXXf sidePointsLeft, ArrayXXf sidePoi
 } // End of findSafeLocalPath
 
 
-ArrayXXf DetectConeLane::placeEquidistantPoints(ArrayXXf sidePoints, bool nEqPointsIsKnown, int nEqPoints, float eqDistance)
+Eigen::ArrayXXf DetectConeLane::placeEquidistantPoints(ArrayXXf sidePoints, bool nEqPointsIsKnown, int nEqPoints, float eqDistance)
 {
 // Places linearly equidistant points along a sequence of points.
 // If nEqPoints is known it will not use the input value for eqDistance, and instead calculate a suitable value.
@@ -639,7 +695,7 @@ ArrayXXf DetectConeLane::placeEquidistantPoints(ArrayXXf sidePoints, bool nEqPoi
 
   // Full path length, and save lengths of individual segments
   float pathLength = 0;
-  ArrayXXf segLength(nCones-1,1);
+  Eigen::ArrayXXf segLength(nCones-1,1);
   for(int i = 0; i < nCones-1; i = i+1)
   {
     segLength(i) = ((sidePoints.row(i+1)-sidePoints.row(i)).matrix()).norm();
@@ -658,18 +714,18 @@ ArrayXXf DetectConeLane::placeEquidistantPoints(ArrayXXf sidePoints, bool nEqPoi
   }
 
   // The latest point that you placed
-  ArrayXXf latestPointCoords = sidePoints.row(0);
+  Eigen::ArrayXXf latestPointCoords = sidePoints.row(0);
   // The latest cone that you passed
   int latestConeIndex = 0;
   // How long is left of the current segment
   float remainderOfSeg = segLength(0);
   // The new list of linearly equidistant points
-  ArrayXXf newSidePoints(nEqPoints,2);
+  Eigen::ArrayXXf newSidePoints(nEqPoints,2);
   // The first point should be at the same place as the first cone
   newSidePoints.row(0) = latestPointCoords;
 
   // A temporary vector
-  ArrayXXf vec(1,2);
+  Eigen::ArrayXXf vec(1,2);
   // Temporary distances
   float distanceToGoFromLatestPassedPoint, lengthOfNextSeg;
   // Start stepping through the given path
@@ -711,14 +767,14 @@ ArrayXXf DetectConeLane::placeEquidistantPoints(ArrayXXf sidePoints, bool nEqPoi
 } // End of placeEquidistantPoints
 
 
-ArrayXXf DetectConeLane::traceBackToClosestPoint(ArrayXXf p1, ArrayXXf p2, ArrayXXf q)
+Eigen::ArrayXXf DetectConeLane::traceBackToClosestPoint(Eigen::ArrayXXf p1, Eigen::ArrayXXf p2, Eigen::ArrayXXf q)
 {
    // Input: The coordinates of the first two points. (row vectors)
    //        A reference point q (vehicle location)
    // Output: the point along the line that is closest to the reference point.
 
-   ArrayXXf v = p1-p2;	// The line to trace
-   ArrayXXf n(1,2);	// The normal vector
+   Eigen::ArrayXXf v = p1-p2;	// The line to trace
+   Eigen::ArrayXXf n(1,2);	// The normal vector
    n(0,0) = -v(0,1); n(0,1) = v(0,0);
    //float d = (p1(0,0)*v(0,1)-v(0,0)*p1(0,1))/(n(0,0)*v(0,1)-v(0,0)*n(0,1)); // Shortest distance between [0,0] and the vector
    float d = (v(0,1)*(p1(0,0)-q(0,0))+v(0,0)*(q(0,1)-p1(0,1)))/(n(0,0)*v(0,1)-v(0,0)*n(0,1)); // Shortest distance between q and the vector
@@ -726,15 +782,15 @@ ArrayXXf DetectConeLane::traceBackToClosestPoint(ArrayXXf p1, ArrayXXf p2, Array
 }
 
 
-ArrayXXf DetectConeLane::orderCones(ArrayXXf cones, ArrayXXf vehicleLocation)
+Eigen::ArrayXXf DetectConeLane::orderCones(Eigen::ArrayXXf cones, Eigen::ArrayXXf vehicleLocation)
 {
   // Input: Cone and vehicle positions in the same coordinate system
   // Output: The cones in order
   int nCones = cones.rows();
-  ArrayXXf current = vehicleLocation;
-  ArrayXXf found(nCones,1);
+  Eigen::ArrayXXf current = vehicleLocation;
+  Eigen::ArrayXXf found(nCones,1);
   found.fill(-1);
-  ArrayXXf orderedCones(nCones,2);
+  Eigen::ArrayXXf orderedCones(nCones,2);
   float shortestDist;
   float tmpDist;
   int closestConeIndex;
@@ -770,20 +826,21 @@ ArrayXXf DetectConeLane::orderCones(ArrayXXf cones, ArrayXXf vehicleLocation)
 } // End of orderCones
 
 
-ArrayXXf DetectConeLane::orderAndFilterCones(ArrayXXf cones, ArrayXXf vehicleLocation)
+Eigen::ArrayXXf DetectConeLane::orderAndFilterCones(Eigen::ArrayXXf cones, Eigen::ArrayXXf vehicleLocation)
 {
   // Input: Cone and vehicle positions in the same coordinate system
   // Output: The cones that satisfy some requirements, in order
 
   int nCones = cones.rows();
-  ArrayXXf current = vehicleLocation;
-  ArrayXXf found(nCones,1);
+  Eigen::ArrayXXf current = vehicleLocation;
+  Eigen::ArrayXXf found(nCones,1);
   found.fill(-1);
 
   float shortestDist, tmpDist, line1, line2, line3, angle;
   int closestConeIndex;
   int nAcceptedCones = 0;
 
+// TODO: Fix commandlineArguments for all configuration stuff
   auto kv = getKeyValueConfiguration();
   float const coneLengthSeparationThreshold = kv.getValue<float>("logic-cfsd18-perception-detectconelane.coneLengthSeparationThreshold");
   float const maxConeAngle = kv.getValue<float>("logic-cfsd18-perception-detectconelane.maxConeAngle");
@@ -839,7 +896,7 @@ std::cout << "Remove invalid cones" << std::endl;
   } // End of for
 
   // Rearrange cones to have the order of found
-  ArrayXXf orderedCones(nAcceptedCones,2);
+  Eigen::ArrayXXf orderedCones(nAcceptedCones,2);
   for(int i = 0; i < nAcceptedCones; i = i+1)
   {
     orderedCones.row(i) = cones.row(found(i));
@@ -849,16 +906,16 @@ std::cout << "Remove invalid cones" << std::endl;
 } // End of orderAndFilterCones
 
 
-ArrayXXf DetectConeLane::insertNeededGuessedCones(ArrayXXf longSide, ArrayXXf shortSide, ArrayXXf vehicleLocation, float distanceThreshold, float guessDistance, bool guessToTheLeft)
+Eigen::ArrayXXf DetectConeLane::insertNeededGuessedCones(Eigen::ArrayXXf longSide, Eigen::ArrayXXf shortSide, Eigen::ArrayXXf vehicleLocation, float distanceThreshold, float guessDistance, bool guessToTheLeft)
 {
   // Input: Both cone sides, vehicle position, two distance values and if the guesses should be on the left side
   // Output: The new ordered short side with mixed real and guessed cones
   int nConesLong = longSide.rows();
   int nConesShort = shortSide.rows();
 
-  ArrayXXf guessedCones(std::max(2*nConesLong-2,0),2); // 2n-2 is the number of guesses if all known cones need guessed matches
+  Eigen::ArrayXXf guessedCones(std::max(2*nConesLong-2,0),2); // 2n-2 is the number of guesses if all known cones need guessed matches
   float shortestDist, tmpDist;
-  ArrayXXf guess(1,2);
+  Eigen::ArrayXXf guess(1,2);
   int nGuessedCones = 0;
 
   // Every long side cone should search for a possible match on the other side
@@ -903,23 +960,23 @@ ArrayXXf DetectConeLane::insertNeededGuessedCones(ArrayXXf longSide, ArrayXXf sh
   } // End of for
 
   // Collect real and guessed cones in the same array, and order them
-  ArrayXXf guessedConesFinal = guessedCones.topRows(nGuessedCones);
-  ArrayXXf realAndGuessedCones(nConesShort+nGuessedCones,2);
+  Eigen::ArrayXXf guessedConesFinal = guessedCones.topRows(nGuessedCones);
+  Eigen::ArrayXXf realAndGuessedCones(nConesShort+nGuessedCones,2);
   realAndGuessedCones.topRows(nConesShort) = shortSide;
   realAndGuessedCones.bottomRows(nGuessedCones) = guessedConesFinal;
 
-  ArrayXXf newShortSide = DetectConeLane::orderCones(realAndGuessedCones, vehicleLocation);
+  Eigen::ArrayXXf newShortSide = DetectConeLane::orderCones(realAndGuessedCones, vehicleLocation);
   return newShortSide;
 } // End of insertNeededGuessedCones
 
 
-ArrayXXf DetectConeLane::guessCones(ArrayXXf firstCone, ArrayXXf secondCone, float guessDistance, bool guessToTheLeft, bool guessForFirstCone, bool guessForSecondCone)
+Eigen::ArrayXXf DetectConeLane::guessCones(Eigen::ArrayXXf firstCone, Eigen::ArrayXXf secondCone, float guessDistance, bool guessToTheLeft, bool guessForFirstCone, bool guessForSecondCone)
 {
   // Input: Two neighbouring cones, the guessing distance, if guesses should go to the left or not, and which known cones should
   // get matching guesses
   // Output: Guessed cone positions
 
-  ArrayXXf vector = secondCone-firstCone;
+  Eigen::ArrayXXf vector = secondCone-firstCone;
   float direction;
   if(guessToTheLeft)
   {
@@ -930,13 +987,13 @@ ArrayXXf DetectConeLane::guessCones(ArrayXXf firstCone, ArrayXXf secondCone, flo
     direction = -1.0;
   } // End of else
 
-  ArrayXXf normal(1,2);
+  Eigen::ArrayXXf normal(1,2);
   normal << -vector(1),vector(0);
   normal = normal/((normal.matrix()).norm());
-  ArrayXXf guessVector = direction*guessDistance*normal;
+  Eigen::ArrayXXf guessVector = direction*guessDistance*normal;
 
   // The guess is placed a guessVector away from the cone that should get a mathing guess
-  ArrayXXf guessedCones(1,2);
+  Eigen::ArrayXXf guessedCones(1,2);
   if(guessForFirstCone && !guessForSecondCone)
   {
     guessedCones << firstCone(0)+guessVector(0),firstCone(1)+guessVector(1);
@@ -956,7 +1013,7 @@ ArrayXXf DetectConeLane::guessCones(ArrayXXf firstCone, ArrayXXf secondCone, flo
 } // End of guessCones
 
 
-float DetectConeLane::findTotalPathLength(ArrayXXf sidePoints)
+float DetectConeLane::findTotalPathLength(Eigen::ArrayXXf sidePoints)
 {
   // Input: Cone positions
   // Output: Total length of cone sequence
@@ -975,14 +1032,14 @@ float DetectConeLane::findTotalPathLength(ArrayXXf sidePoints)
 } // End of findTotalPathLength
 
 
-float DetectConeLane::findFactorToClosestPoint(ArrayXXf p1, ArrayXXf p2, ArrayXXf q)
+float DetectConeLane::findFactorToClosestPoint(Eigen::ArrayXXf p1, Eigen::ArrayXXf p2, Eigen::ArrayXXf q)
 {
   // Input: The two cones of a cone segment and a reference point
   // Output: The factor to multiply with the vector between the cones in order to reach the point on the segment that has a
   // perpendicular line to the reference point
 
-  ArrayXXf v = p2-p1; // The line to follow
-  ArrayXXf n(1,2);    // The normal
+  Eigen::ArrayXXf v = p2-p1; // The line to follow
+  Eigen::ArrayXXf n(1,2);    // The normal
   n << -v(1),v(0);
 
   float factor = (q(0)-p1(0)+(p1(1)-q(1))*n(0)/n(1))/(v(0)-v(1)*n(0)/n(1));
@@ -991,72 +1048,12 @@ float DetectConeLane::findFactorToClosestPoint(ArrayXXf p1, ArrayXXf p2, ArrayXX
 } // End of findFactorToClosestPoint
 
 
-void DetectConeLane::sortIntoSideArrays(MatrixXd extractedCones, int nLeft, int nRight, int nSmall, int nBig)
-{
-  int coneNum = extractedCones.cols();
-  //Convert to cartesian
-  Eigen::MatrixXd cone;
-  Eigen::MatrixXd coneLocal = Eigen::MatrixXd::Zero(2,coneNum);
-
-  for(int p = 0; p < coneNum; p++)
-  {
-    cone = DetectConeLane::Spherical2Cartesian(extractedCones(0,p), 0.0, extractedCones(1,p));
-    coneLocal.col(p) = cone;
-  } // End of for
-//std::cout << "ConeLocal: " << coneLocal.transpose() << std::endl;
-
-  Eigen::MatrixXd coneLeft = Eigen::MatrixXd::Zero(2,nLeft);
-  Eigen::MatrixXd coneRight = Eigen::MatrixXd::Zero(2,nRight);
-  Eigen::MatrixXd coneSmall = Eigen::MatrixXd::Zero(2,nSmall);
-  Eigen::MatrixXd coneBig = Eigen::MatrixXd::Zero(2,nBig);
-  int a = 0;
-  int b = 0;
-  int c = 0;
-  int d = 0;
-  int type;
-
-  for(int k = 0; k < coneNum; k++){
-    type = static_cast<int>(extractedCones(2,k));
-    if(type == 1)
-    {
-      coneLeft.col(a) = coneLocal.col(k);
-      a++;
-    }
-    else if(type == 2)
-    {
-      coneRight.col(b) = coneLocal.col(k);
-      b++;
-    }
-    else if(type == 3)
-    {
-      coneSmall.col(c) = coneLocal.col(k);
-      c++;
-    }
-    else if(type == 4)
-    {
-      coneBig.col(d) = coneLocal.col(k);
-      d++;
-    } // End of else
-  } // End of for
-
-
-  ArrayXXf location(1,2);
-  location << -3,0;
-
-  MatrixXf coneLeft_f = coneLeft.cast <float> ();
-  MatrixXf coneRight_f = coneRight.cast <float> ();
-  ArrayXXf sideLeft = coneLeft_f.transpose().array();
-  ArrayXXf sideRight = coneRight_f.transpose().array();
-
-  DetectConeLane::generateSurfaces(sideLeft, sideRight, location);
-} // End of sortIntoSideArrays
-
-
 void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eigen::ArrayXXf virtualPointsShort)
 {
   int nSurfaces = virtualPointsLong.rows()/2;
   //std::cout << "Sending " << nSurfaces << " surfaces" << std::endl;
 
+// TODO: Fix sending messages with libcluon od4session
   opendlv::logic::perception::GroundSurfaceProperty surface;
   surface.setSurfaceId(m_surfaceId);
   std::string property = std::to_string(nSurfaces);
@@ -1085,11 +1082,3 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
   m_surfaceId = rndmId;
 } // End of sendMatchedContainer
 
-
-
-
-
-}
-}
-}
-}

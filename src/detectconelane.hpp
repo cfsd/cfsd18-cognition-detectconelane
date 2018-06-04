@@ -17,14 +17,12 @@
  * USA.
  */
 
-#ifndef OPENDLV_LOGIC_CFSD18_PERCEPTION_DETECTCONELANE_HPP
-#define OPENDLV_LOGIC_CFSD18_PERCEPTION_DETECTCONELANE_HPP
+#ifndef CFSD18_COGNITION_DETECTCONELANE_HPP
+#define CFSD18_COGNITION_DETECTCONELANE_HPP
 
-#include <opendavinci/odcore/base/module/DataTriggeredConferenceClientModule.h>
-#include <opendavinci/odcore/data/Container.h>
-
-#include <odvdopendlvstandardmessageset/GeneratedHeaders_ODVDOpenDLVStandardMessageSet.h>
-#include <opendavinci/odcore/wrapper/Eigen.h>
+#include <opendlv-standard-message-set.hpp>
+#include <cluon-complete.hpp>
+#include <Eigen/Dense>
 #include <fstream>
 #include <iostream>
 #include <thread>
@@ -33,35 +31,37 @@
 #include <chrono>
 #include <mutex>
 #include <condition_variable>
-#include <opendavinci/odcore/data/TimeStamp.h>
-#include <opendavinci/odcore/base/Lock.h>
-//#include <odvdcfsd18/GeneratedHeaders_ODVDcfsd18.h>
-//#include <odvdcfsd18/GeneratedHeaders_ODVDcfsd18.h>
 
-
-namespace opendlv {
-namespace logic {
-namespace cfsd18 {
-namespace perception {
-
-class DetectConeLane : public odcore::base::module::DataTriggeredConferenceClientModule {
+class DetectConeLane {
  public:
-  DetectConeLane(int32_t const &, char **);
+  DetectConeLane(std::map<std::string, std::string>);
   DetectConeLane(DetectConeLane const &) = delete;
   DetectConeLane &operator=(DetectConeLane const &) = delete;
   virtual ~DetectConeLane();
-  virtual void nextContainer(odcore::data::Container &);
+  virtual void nextContainer(cluon::data::Envelope &);
 
  private:
   void setUp();
   void tearDown();
 
   void initializeCollection();
-  void generateSurfaces(ArrayXXf, ArrayXXf, ArrayXXf);
-  //void CheckContainer(uint32_t);
+  void sortIntoSideArrays(Eigen::MatrixXd, int, int, int, int);
+  void generateSurfaces(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf);
   Eigen::MatrixXd Spherical2Cartesian(double, double, double);
+  void findSafeLocalPath(Eigen::ArrayXXf, Eigen::ArrayXXf);
+  Eigen::ArrayXXf placeEquidistantPoints(Eigen::ArrayXXf, bool, int, float);
+  Eigen::ArrayXXf traceBackToClosestPoint(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf);
+  Eigen::ArrayXXf orderCones(Eigen::ArrayXXf, Eigen::ArrayXXf);
+  Eigen::ArrayXXf orderAndFilterCones(Eigen::ArrayXXf, Eigen::ArrayXXf);
+  Eigen::ArrayXXf insertNeededGuessedCones(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf, float, float, bool);
+  Eigen::ArrayXXf guessCones(Eigen::ArrayXXf, Eigen::ArrayXXf, float, bool, bool, bool);
+  float findTotalPathLength(Eigen::ArrayXXf);
+  float findFactorToClosestPoint(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf);
+  void sendMatchedContainer(Eigen::ArrayXXf, Eigen::ArrayXXf);
 
-
+  std::mutex m_stateMutex;
+  uint16_t m_cid;
+  float m_receiveTimeLimit;
   bool m_newFrame;
   bool m_directionOK;
   bool m_distanceOK;
@@ -86,32 +86,14 @@ class DetectConeLane : public odcore::base::module::DataTriggeredConferenceClien
   int m_directionId;
   int m_distanceId;
   int m_typeId;
-  odcore::base::Mutex m_directionMutex = {};
-  odcore::base::Mutex m_distanceMutex = {};
-  odcore::base::Mutex m_typeMutex = {};
+  std::mutex m_directionMutex = {};
+  std::mutex m_distanceMutex = {};
+  std::mutex m_typeMutex = {};
   int m_surfaceId;
-
 
   const double DEG2RAD = 0.017453292522222; // PI/180.0
 
-  void findSafeLocalPath(ArrayXXf, ArrayXXf);
-  ArrayXXf placeEquidistantPoints(ArrayXXf, bool, int, float);
-  ArrayXXf traceBackToClosestPoint(ArrayXXf, ArrayXXf, ArrayXXf);
-  ArrayXXf orderCones(ArrayXXf, ArrayXXf);
-  ArrayXXf orderAndFilterCones(ArrayXXf, ArrayXXf);
-  ArrayXXf insertNeededGuessedCones(ArrayXXf, ArrayXXf, ArrayXXf, float, float, bool);
-  ArrayXXf guessCones(ArrayXXf, ArrayXXf, float, bool, bool, bool);
-  float findTotalPathLength(ArrayXXf);
-  float findFactorToClosestPoint(ArrayXXf, ArrayXXf, ArrayXXf);
-
-  void sortIntoSideArrays(MatrixXd, int, int, int, int);
-  void sendMatchedContainer(Eigen::ArrayXXf, Eigen::ArrayXXf);
-
 };
 
-}
-}
-}
-}
 
 #endif
