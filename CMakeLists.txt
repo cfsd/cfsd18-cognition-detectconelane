@@ -15,7 +15,7 @@
 
 cmake_minimum_required(VERSION 3.2)
 
-project(opendlv-sim-cfsd18-cognition-blackbox)
+project(cfsd18-cognition-detectconelane)
 
 ################################################################################
 # Defining the relevant versions of OpenDLV Standard Message Set and libcluon.
@@ -38,18 +38,17 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} \
     -O2 \
     -fstack-protector \
     -fomit-frame-pointer \
-    -pipe")
-#\
-#    -pedantic -pedantic-errors \
-#    -Werror \
-#    -Weffc++ \
-#    -Wall -Wextra -Wshadow -Wdeprecated \
-#    -Wdiv-by-zero -Wfloat-equal -Wfloat-conversion -Wsign-compare -Wpointer-arith \
-#    -Wuninitialized -Wunreachable-code \
-#    -Wunused -Wunused-function -Wunused-label -Wunused-parameter -Wunused-but-set-parameter -Wunused-but-set-variable \
-#    -Wunused-value -Wunused-variable -Wunused-result \
-#    -Wmissing-field-initializers -Wmissing-format-attribute -Wmissing-include-dirs -Wmissing-noreturn
-#")
+    -pipe\
+    -pedantic -pedantic-errors \
+    -Werror \
+    -Weffc++ \
+    -Wall -Wextra -Wshadow -Wdeprecated \
+    -Wdiv-by-zero -Wfloat-equal -Wfloat-conversion -Wsign-compare -Wpointer-arith \
+    -Wuninitialized -Wunreachable-code \
+    -Wunused -Wunused-function -Wunused-label -Wunused-parameter -Wunused-but-set-parameter -Wunused-but-set-variable \
+    -Wunused-value -Wunused-variable -Wunused-result \
+    -Wmissing-field-initializers -Wmissing-format-attribute -Wmissing-include-dirs -Wmissing-noreturn")
+
 # Threads are necessary for linking the resulting binaries as UDPReceiver is running in parallel.
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
@@ -78,29 +77,24 @@ include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 ################################################################################
 # Gather all object code first to avoid double compilation. This needs to be done for all added objects, can become very long? Why is this object and not static which works
 
-################################################################################
-# Including g2o in /usr/include
-
 
 ################################################################################
 # Link libs
 set(LIBRARIES Threads::Threads)
 
-FILE(GLOB_RECURSE neat_sources ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/neat/*.cpp)
-
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_library(${PROJECT_NAME}-core ${CMAKE_CURRENT_SOURCE_DIR}/src/blackbox.cpp ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.cpp ${neat_sources})
+add_library(${PROJECT_NAME}-core ${CMAKE_CURRENT_SOURCE_DIR}/src/detectconelane.cpp ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.cpp)
 
 ################################################################################
 # Create executable.
 add_executable(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/src/${PROJECT_NAME}.cpp) #Creates exe of the main .cpp (more like bin)
-target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}-core ${LIBRARIES}) #Links the exe with Libraries like the objects added above and g2o
+target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}-core ${LIBRARIES}) #Links the exe with Libraries like the objects added above
 
 ################################################################################
 # Enable unit testing.
 enable_testing()
-add_executable(${PROJECT_NAME}-runner ${CMAKE_CURRENT_SOURCE_DIR}/test/tests-sim-cfsd18-cognition-blackbox.cpp)
+add_executable(${PROJECT_NAME}-runner ${CMAKE_CURRENT_SOURCE_DIR}/test/tests-cfsd18-cognition-detectconelane.cpp)
 target_link_libraries(${PROJECT_NAME}-runner ${LIBRARIES}  ${PROJECT_NAME}-core)
 add_test(NAME ${PROJECT_NAME}-runner COMMAND ${PROJECT_NAME}-runner)
 
