@@ -23,13 +23,16 @@
 #include <condition_variable>
 #include "detectconelane.hpp"
 
-DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments) :
+DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_stateMutex()
-// TODO: Fix commandlineArguments for all the configuration stuff
+, m_od4(od4)
+//, m_fakeSlamActivated{(commandlineArguments["fakeSlamActivated"].size() != 0) ? (static_cast<bool>(std::stoi(commandlineArguments["fakeSlamActivated"]))) : (0)}
+, m_fakeSlamActivated{(commandlineArguments["fakeSlamActivated"].size() != 0) ? (std::stoi(commandlineArguments["fakeSlamActivated"])==1) : (false)}
+, m_guessDistance{(commandlineArguments["guessDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["guessDistance"]))) : (3.0f)}
+, m_maxConeAngle{(commandlineArguments["maxConeAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeAngle"]))) : (1.570796325f)}
+, m_coneWidthSeparationThreshold{(commandlineArguments["coneWidthSeparationThreshold"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["coneWidthSeparationThreshold"]))) : (3.5f)}
+, m_coneLengthSeparationThreshold{(commandlineArguments["coneLengthSeparationThreshold"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["coneLengthSeparationThreshold"]))) : (5.5f)}
 , m_cid{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))}
-, m_maxSteering{(commandlineArguments["maxSteering"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxSteering"]))) : (25.0f)}
-, m_maxAcceleration{(commandlineArguments["maxAcceleration"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxAcceleration"]))) : (5.0f)}
-, m_maxDeceleration{(commandlineArguments["maxDeceleration"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxDeceleration"]))) : (5.0f)}
 , m_receiveTimeLimit{(commandlineArguments["receiveTimeLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["receiveTimeLimit"]))) : (0.0001f)}
 ,  m_newFrame{true}
 , m_directionOK{false}
@@ -161,7 +164,7 @@ else if(a_container.dataType() == opendlv::logic::perception::ObjectDistance::ID
     std::cout<<m_nConesInFrame<<" frames to run"<<"\n";
   }
   // Run if frame is full or if we have waited to long for the remaining messages
-  if ((m_distanceFrame.size()==m_nConesInFrame || duration>receiveTimeLimit)) { //!m_newFrame && objectId==m_surfaceId &&
+  if ((m_distanceFrame.size()==m_nConesInFrame || duration>m_receiveTimeLimit)) { //!m_newFrame && objectId==m_surfaceId &&
     m_distanceOK=true;
     //std::cout<<m_distanceFrame.size()<<" distanceFrames to run"<<"\n";
     //std::cout<<m_distanceFrameBuffer.size()<<" distanceFrames in buffer"<<"\n";
@@ -301,7 +304,7 @@ void DetectConeLane::initializeCollection(){
   int nBig = 0;
 
     for (int i = 0; i < extractedCones.cols(); i++) {
-      int type = extractedCones(2,i);
+      int type = static_cast<int>(extractedCones(2,i));
       if(type == 1){ nLeft++; }
       else if(type == 2){ nRight++; }
       else if(type == 3){ nSmall++; }
@@ -390,14 +393,10 @@ void DetectConeLane::sortIntoSideArrays(Eigen::MatrixXd extractedCones, int nLef
 
 
 void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf sideRight, Eigen::ArrayXXf location){
-// TODO: Fix commandlineArguments for all the configuration stuff
-  auto kv = getKeyValueConfiguration();
-  float const coneWidthSeparationThreshold = kv.getValue<float>("logic-cfsd18-perception-detectconelane.coneWidthSeparationThreshold");
-  float const guessDistance = kv.getValue<float>("logic-cfsd18-perception-detectconelane.guessDistance");
-  bool const fakeSlamActivated = kv.getValue<bool>("logic-cfsd18-perception-detectconelane.fakeSlamActivated");
+
   Eigen::ArrayXXf orderedConesLeft;
   Eigen::ArrayXXf orderedConesRight;
-  if (!fakeSlamActivated) {
+  if (!m_fakeSlamActivated) {
     orderedConesLeft = DetectConeLane::orderAndFilterCones(sideLeft,location);
     orderedConesRight = DetectConeLane::orderAndFilterCones(sideRight,location);
   }else{
@@ -422,7 +421,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   if(leftIsLong)
   {
     Eigen::ArrayXXf tmpLongSide = orderedConesLeft;
-    Eigen::ArrayXXf tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesLeft, orderedConesRight, location, coneWidthSeparationThreshold,  guessDistance, false);
+    Eigen::ArrayXXf tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesLeft, orderedConesRight, location, m_coneWidthSeparationThreshold,  m_guessDistance, false);
 
     longSide.resize(tmpLongSide.rows(),tmpLongSide.cols());
     longSide = tmpLongSide;
@@ -433,7 +432,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   else
   {
     Eigen::ArrayXXf tmpLongSide = orderedConesRight;
-    Eigen::ArrayXXf tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesRight, orderedConesLeft, location, coneWidthSeparationThreshold,  guessDistance, true);
+    Eigen::ArrayXXf tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesRight, orderedConesLeft, location, m_coneWidthSeparationThreshold,  m_guessDistance, true);
 
     longSide.resize(tmpLongSide.rows(),tmpLongSide.cols());
     longSide = tmpLongSide;
@@ -455,25 +454,22 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     if(longSide.rows() == 0)
     { std::cout<<"No Cones"<<"\n";
       //No cones
-//TODO: Fix sending messages with libcluon od4session
       opendlv::logic::perception::GroundSurfaceProperty surface;
-      surface.setSurfaceId(m_surfaceId);
-      surface.setProperty("1");
-      odcore::data::Container cStop1(surface);
-      getConference().send(cStop1);
+      surface.surfaceId(m_surfaceId);
+      surface.property("1");
+      m_od4.send(surface); //TODO: Sender stamps
 
       opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-      surfaceArea.setSurfaceId(m_surfaceId);
-      surfaceArea.setX1(1.0f);
-      surfaceArea.setY1(0.0f);
-      surfaceArea.setX2(1.0f);
-      surfaceArea.setY2(0.0f);
-      surfaceArea.setX3(0.0f);
-      surfaceArea.setY3(0.0f);
-      surfaceArea.setX4(0.0f);
-      surfaceArea.setY4(0.0f);
-      odcore::data::Container cStop2(surfaceArea);
-      getConference().send(cStop2);
+      surfaceArea.surfaceId(m_surfaceId);
+      surfaceArea.x1(1.0f);
+      surfaceArea.y1(0.0f);
+      surfaceArea.x2(1.0f);
+      surfaceArea.y2(0.0f);
+      surfaceArea.x3(0.0f);
+      surfaceArea.y3(0.0f);
+      surfaceArea.x4(0.0f);
+      surfaceArea.y4(0.0f);
+      m_od4.send(surfaceArea); //TODO: Sender stamps
       //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
       int rndmId = rand();
       while (m_surfaceId == rndmId){rndmId = rand();}
@@ -493,23 +489,21 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
       }
 
       opendlv::logic::perception::GroundSurfaceProperty surface;
-      surface.setSurfaceId(m_surfaceId);
-      surface.setProperty("1");
-      odcore::data::Container cGo1(surface);
-      getConference().send(cGo1);
+      surface.surfaceId(m_surfaceId);
+      surface.property("1");
+      m_od4.send(surface);
 
       opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-      surfaceArea.setSurfaceId(m_surfaceId);
-      surfaceArea.setX1(0.0f);
-      surfaceArea.setY1(0.0f);
-      surfaceArea.setX2(0.0f);
-      surfaceArea.setY2(0.0f);
-      surfaceArea.setX3(longSide(0,0));
-      surfaceArea.setY3(longSide(0,1)+1.5f*direction);
-      surfaceArea.setX4(longSide(0,0));
-      surfaceArea.setY4(longSide(0,1)+1.5f*direction);
-      odcore::data::Container cGo2(surfaceArea);
-      getConference().send(cGo2);
+      surfaceArea.surfaceId(m_surfaceId);
+      surfaceArea.x1(0.0f);
+      surfaceArea.y1(0.0f);
+      surfaceArea.x2(0.0f);
+      surfaceArea.y2(0.0f);
+      surfaceArea.x3(longSide(0,0));
+      surfaceArea.y3(longSide(0,1)+1.5f*direction);
+      surfaceArea.x4(longSide(0,0));
+      surfaceArea.y4(longSide(0,1)+1.5f*direction);
+      m_od4.send(surfaceArea); //TODO: Sender stamps
       //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
       int rndmId = rand();
       while (m_surfaceId == rndmId){rndmId = rand();}
@@ -519,23 +513,21 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     { std::cout<<"1 on each side"<<"\n";
       //1 on each side
       opendlv::logic::perception::GroundSurfaceProperty surface;
-      surface.setSurfaceId(m_surfaceId);
-      surface.setProperty("1");
-      odcore::data::Container cGo3(surface);
-      getConference().send(cGo3);
+      surface.surfaceId(m_surfaceId);
+      surface.property("1");
+      m_od4.send(surface); //TODO: Sender stamps
 
       opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-      surfaceArea.setSurfaceId(m_surfaceId);
-      surfaceArea.setX1(0.0f);
-      surfaceArea.setY1(0.0f);
-      surfaceArea.setX2(0.0f);
-      surfaceArea.setY2(0.0f);
-      surfaceArea.setX3(longSide(0,0));
-      surfaceArea.setY3(longSide(0,1));
-      surfaceArea.setX4(shortSide(0,0));
-      surfaceArea.setY4(shortSide(0,1));
-      odcore::data::Container cGo4(surfaceArea);
-      getConference().send(cGo4);
+      surfaceArea.surfaceId(m_surfaceId);
+      surfaceArea.x1(0.0f);
+      surfaceArea.y1(0.0f);
+      surfaceArea.x2(0.0f);
+      surfaceArea.y2(0.0f);
+      surfaceArea.x3(longSide(0,0));
+      surfaceArea.y3(longSide(0,1));
+      surfaceArea.x4(shortSide(0,0));
+      surfaceArea.y4(shortSide(0,1));
+      m_od4.send(surfaceArea); //TODO: Sender stamps
       //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
       int rndmId = rand();
       while (m_surfaceId == rndmId){rndmId = rand();}
@@ -551,7 +543,7 @@ Eigen::MatrixXd DetectConeLane::Spherical2Cartesian(double azimuth, double zenim
 {
   double xData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*sin(azimuth * static_cast<double>(DEG2RAD));
   double yData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*cos(azimuth * static_cast<double>(DEG2RAD));
-  Eigen::MatrixXd recievedPoint = MatrixXd::Zero(2,1);
+  Eigen::MatrixXd recievedPoint = Eigen::MatrixXd::Zero(2,1);
   recievedPoint << xData,
                    yData;
   return recievedPoint;
@@ -584,7 +576,7 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
   Eigen::ArrayXXf virtualPointsShort(nMidPoints,2);
 
   float shortestDist, tmpDist, factor;
-  int closestConeIndex;
+  int closestConeIndex = -100;
 
   // Every virtual point on the long side should get one corresponding point on the short side
   for(int i = 0; i < nMidPoints; i = i+1)
@@ -685,7 +677,7 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
 } // End of findSafeLocalPath
 
 
-Eigen::ArrayXXf DetectConeLane::placeEquidistantPoints(ArrayXXf sidePoints, bool nEqPointsIsKnown, int nEqPoints, float eqDistance)
+Eigen::ArrayXXf DetectConeLane::placeEquidistantPoints(Eigen::ArrayXXf sidePoints, bool nEqPointsIsKnown, int nEqPoints, float eqDistance)
 {
 // Places linearly equidistant points along a sequence of points.
 // If nEqPoints is known it will not use the input value for eqDistance, and instead calculate a suitable value.
@@ -710,7 +702,7 @@ Eigen::ArrayXXf DetectConeLane::placeEquidistantPoints(ArrayXXf sidePoints, bool
   else
   {
     //Calculate how many points will fit
-    nEqPoints = std::ceil(pathLength/eqDistance)+1;
+    nEqPoints = static_cast<int>(std::ceil(pathLength/eqDistance))+1;
   }
 
   // The latest point that you placed
@@ -788,7 +780,7 @@ Eigen::ArrayXXf DetectConeLane::orderCones(Eigen::ArrayXXf cones, Eigen::ArrayXX
   // Output: The cones in order
   int nCones = cones.rows();
   Eigen::ArrayXXf current = vehicleLocation;
-  Eigen::ArrayXXf found(nCones,1);
+  Eigen::ArrayXXi found(nCones,1);
   found.fill(-1);
   Eigen::ArrayXXf orderedCones(nCones,2);
   float shortestDist;
@@ -833,17 +825,12 @@ Eigen::ArrayXXf DetectConeLane::orderAndFilterCones(Eigen::ArrayXXf cones, Eigen
 
   int nCones = cones.rows();
   Eigen::ArrayXXf current = vehicleLocation;
-  Eigen::ArrayXXf found(nCones,1);
+  Eigen::ArrayXXi found(nCones,1);
   found.fill(-1);
 
   float shortestDist, tmpDist, line1, line2, line3, angle;
   int closestConeIndex;
   int nAcceptedCones = 0;
-
-// TODO: Fix commandlineArguments for all configuration stuff
-  auto kv = getKeyValueConfiguration();
-  float const coneLengthSeparationThreshold = kv.getValue<float>("logic-cfsd18-perception-detectconelane.coneLengthSeparationThreshold");
-  float const maxConeAngle = kv.getValue<float>("logic-cfsd18-perception-detectconelane.maxConeAngle");
 
   for(int i = 0; i < nCones; i = i+1)
   {
@@ -855,7 +842,7 @@ Eigen::ArrayXXf DetectConeLane::orderAndFilterCones(Eigen::ArrayXXf cones, Eigen
       if(!((found==j).any()))
       {
         tmpDist = ((current-cones.row(j)).matrix()).norm();
-        if(tmpDist < shortestDist && ((tmpDist < coneLengthSeparationThreshold && i>0) || (tmpDist < coneLengthSeparationThreshold+3.5f && i<1)) )
+        if(tmpDist < shortestDist && ((tmpDist < m_coneLengthSeparationThreshold && i>0) || (tmpDist < m_coneLengthSeparationThreshold+3.5f && i<1)) )
         {
           // If it's one of the first two cones, the nearest neighbour is accepted
           if(i < 2)
@@ -873,7 +860,7 @@ Eigen::ArrayXXf DetectConeLane::orderAndFilterCones(Eigen::ArrayXXf cones, Eigen
             line3 = ((cones.row(j)-cones.row(found(i-2))).matrix()).norm();
             angle = std::acos((float)(-std::pow(line3,2)+std::pow(line2,2)+std::pow(line1,2))/(2*line2*line1));
 
-            if(std::abs(angle) > maxConeAngle)
+            if(std::abs(angle) > m_maxConeAngle)
             {
               shortestDist = tmpDist;
               closestConeIndex = j;
@@ -1053,28 +1040,25 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
   int nSurfaces = virtualPointsLong.rows()/2;
   //std::cout << "Sending " << nSurfaces << " surfaces" << std::endl;
 
-// TODO: Fix sending messages with libcluon od4session
   opendlv::logic::perception::GroundSurfaceProperty surface;
-  surface.setSurfaceId(m_surfaceId);
+  surface.surfaceId(m_surfaceId);
   std::string property = std::to_string(nSurfaces);
-  surface.setProperty(property);
-  odcore::data::Container c0(surface);
-  getConference().send(c0);
+  surface.property(property);
+  m_od4.send(surface); //TODO: Sender stamps
 
   for(int n = 0; n < nSurfaces; n++)
   {
     opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-    surfaceArea.setSurfaceId(m_surfaceId);
-    surfaceArea.setX1(virtualPointsLong(2*n,0));
-    surfaceArea.setY1(virtualPointsLong(2*n,1));
-    surfaceArea.setX2(virtualPointsShort(2*n,0));
-    surfaceArea.setY2(virtualPointsShort(2*n,1));
-    surfaceArea.setX3(virtualPointsLong(2*n+1,0));
-    surfaceArea.setY3(virtualPointsLong(2*n+1,1));
-    surfaceArea.setX4(virtualPointsShort(2*n+1,0));
-    surfaceArea.setY4(virtualPointsShort(2*n+1,1));
-    odcore::data::Container c1(surfaceArea);
-    getConference().send(c1);
+    surfaceArea.surfaceId(m_surfaceId);
+    surfaceArea.x1(virtualPointsLong(2*n,0));
+    surfaceArea.y1(virtualPointsLong(2*n,1));
+    surfaceArea.x2(virtualPointsShort(2*n,0));
+    surfaceArea.y2(virtualPointsShort(2*n,1));
+    surfaceArea.x3(virtualPointsLong(2*n+1,0));
+    surfaceArea.y3(virtualPointsLong(2*n+1,1));
+    surfaceArea.x4(virtualPointsShort(2*n+1,0));
+    surfaceArea.y4(virtualPointsShort(2*n+1,1));
+    m_od4.send(surfaceArea); //TODO: Sender stamps
   } // End of for
   //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
   int rndmId = rand();

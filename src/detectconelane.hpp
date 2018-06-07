@@ -34,7 +34,7 @@
 
 class DetectConeLane {
  public:
-  DetectConeLane(std::map<std::string, std::string>);
+  DetectConeLane(std::map<std::string, std::string>, cluon::OD4Session &od4);
   DetectConeLane(DetectConeLane const &) = delete;
   DetectConeLane &operator=(DetectConeLane const &) = delete;
   virtual ~DetectConeLane();
@@ -60,6 +60,12 @@ class DetectConeLane {
   void sendMatchedContainer(Eigen::ArrayXXf, Eigen::ArrayXXf);
 
   std::mutex m_stateMutex;
+  cluon::OD4Session &m_od4;
+  bool m_fakeSlamActivated;
+  float m_guessDistance;
+  float m_maxConeAngle;
+  float m_coneWidthSeparationThreshold;
+  float m_coneLengthSeparationThreshold;
   uint16_t m_cid;
   float m_receiveTimeLimit;
   bool m_newFrame;

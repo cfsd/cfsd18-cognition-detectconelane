@@ -43,5 +43,4 @@ WORKDIR /usr/bin
 #COPY --from=builder /usr/local/lib/ /usr/lib/
 #COPY --from=builder /usr/lib/ /usr/lib/
 COPY --from=builder /tmp/cfsd18-cognition-detectconelane-dest/bin/cfsd18-cognition-detectconelane .
-#RUN apk update && apk add g++ #This is extremely ugly and needs to be fixed
 CMD ["/usr/bin/cfsd18-cognition-detectconelane"]
