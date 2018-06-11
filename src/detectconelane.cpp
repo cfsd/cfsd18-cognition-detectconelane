@@ -26,15 +26,14 @@
 DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_stateMutex()
 , m_od4(od4)
-//, m_fakeSlamActivated{(commandlineArguments["fakeSlamActivated"].size() != 0) ? (static_cast<bool>(std::stoi(commandlineArguments["fakeSlamActivated"]))) : (0)}
+, m_senderStamp{(commandlineArguments["senderStamp"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["senderStamp"]))) : (211)}
 , m_fakeSlamActivated{(commandlineArguments["fakeSlamActivated"].size() != 0) ? (std::stoi(commandlineArguments["fakeSlamActivated"])==1) : (false)}
 , m_guessDistance{(commandlineArguments["guessDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["guessDistance"]))) : (3.0f)}
 , m_maxConeAngle{(commandlineArguments["maxConeAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeAngle"]))) : (1.570796325f)}
 , m_coneWidthSeparationThreshold{(commandlineArguments["coneWidthSeparationThreshold"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["coneWidthSeparationThreshold"]))) : (3.5f)}
 , m_coneLengthSeparationThreshold{(commandlineArguments["coneLengthSeparationThreshold"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["coneLengthSeparationThreshold"]))) : (5.5f)}
-, m_cid{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))}
-, m_receiveTimeLimit{(commandlineArguments["receiveTimeLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["receiveTimeLimit"]))) : (0.0001f)}
-,  m_newFrame{true}
+, m_receiveTimeLimit{(commandlineArguments["receiveTimeLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["receiveTimeLimit"]))) : (0.5f)}
+, m_newFrame{true}
 , m_directionOK{false}
 , m_distanceOK {false}
 , m_runOK{true}
@@ -59,8 +58,15 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_distanceId{}
 , m_typeId{}
 , m_surfaceId{}
+, m_tick{}
+, m_tock{}
+, m_newClock{true}
 {
   m_surfaceId = rand();
+  std::cout<<"DetectConeLane set up with "<<commandlineArguments.size()<<" commandlineArguments: "<<std::endl;
+  for (std::map<std::string, std::string >::iterator it = commandlineArguments.begin();it !=commandlineArguments.end();it++){
+    std::cout<<it->first<<" "<<it->second<<std::endl;
+  }
 }
 
 DetectConeLane::~DetectConeLane()
@@ -79,16 +85,19 @@ void DetectConeLane::tearDown()
 void DetectConeLane::nextContainer(cluon::data::Envelope &a_container)
 {
 if(a_container.dataType() == opendlv::logic::perception::ObjectProperty::ID()){
-    //std::cout << "RECIEVED AN OBJECTPROPERY!" << std::endl;
+    if (m_newClock) {
+      m_newClock = false;
+      m_tick = std::chrono::system_clock::now();
+    }
     auto object = cluon::extractMessage<opendlv::logic::perception::ObjectProperty>(std::move(a_container));
     int objectId = object.objectId();
     auto nConesInFrame = object.property();
-
+    //std::cout<<"DetectConeLane received: "<<" frame ID: "<<objectId<<" frame size: "<<nConesInFrame<<std::endl;
     if (m_newFrame) { // If true, a frame has just been sent for processing
       m_newFrame = false;
       m_nConesInFrame = std::stoul(nConesInFrame);
       m_objectPropertyId = objectId; // Currently not used.
-      //std::cout<<m_nConesInFrame<<" frames to run"<<"\n";
+      //std::cout<<m_nConesInFrame<<" frames to collect"<<"\n";
     }
 }
 
@@ -99,17 +108,21 @@ if (a_container.dataType() == opendlv::logic::perception::ObjectDirection::ID())
       auto object = cluon::extractMessage<opendlv::logic::perception::ObjectDirection>(std::move(a_container));
       objectId = object.objectId();
       cluon::data::TimeStamp containerStamp = a_container.sampleTimeStamp();
-      double timeStamp = containerStamp.microseconds(); // Save timeStamp for sorting purposes;
-
+      double timeStamp = cluon::time::toMicroseconds(containerStamp); // Save timeStamp for sorting purposes;
+      //std::cout<<"direction timeStamp: "<<timeStamp<<std::endl;
+      //std::cout<<"DetectConeLane received direction: "<<object.azimuthAngle()<<" frame ID: "<<objectId<<" timeStamp: "<<timeStamp<<std::endl;
         if (m_newDirectionId) {
           m_directionId = (objectId!=m_lastDirectionId)?(objectId):(-1); // Update object id if it is not remains from an already run frame
           m_newDirectionId=(m_directionId !=-1)?(false):(true); // Set new id to false while collecting current frame id, or keep as true if current id is from an already run frame
+          //std::cout<<"new direction id: "<<m_directionId<<std::endl;
         }
 
         float angle = object.azimuthAngle(); //Unpack message
 
         if (objectId == m_directionId) {
+          //std::cout<<"m_directionId: "<<m_directionId<<std::endl;
           m_directionFrame[timeStamp] = angle;
+          //std::cout<<"direction angle: "<<angle<<std::endl;
           m_directionTimeReceived = std::chrono::system_clock::now(); //Store time for latest message recieved
         } else if (objectId != m_lastDirectionId){ // If message doesn't belong to current or previous frame.
           m_directionFrameBuffer[timeStamp] = angle; // Place message content coordinates in buffer
@@ -117,11 +130,12 @@ if (a_container.dataType() == opendlv::logic::perception::ObjectDirection::ID())
     }
     auto wait = std::chrono::system_clock::now(); // Time point now
     std::chrono::duration<double> dur = wait-m_directionTimeReceived; // Duration since last message recieved to m_surfaceFrame
+    //std::cout<<"duration: "<<dur.count()<<std::endl;
     double duration = (m_directionId!=-1)?(dur.count()):(-1.0); // Duration value of type double in seconds OR -1 which prevents running the surface while ignoring messages from an already run frame
     if ((duration>m_receiveTimeLimit) && (m_nConesInFrame>m_directionFrame.size())) { //Only for debug
-      std::cout<<"DURATION TIME DIRECTION EXCEEDED: "<<duration<<std::endl;
-      std::cout<<m_directionFrame.size()<<" directionFrames to run"<<"\n";
-      std::cout<<m_nConesInFrame<<" frames to run"<<"\n";
+      std::cout<<m_directionId<<" DURATION TIME DIRECTION EXCEEDED: "<<duration<<std::endl;
+      //std::cout<<m_directionFrame.size()<<" directionFrames to run"<<"\n";
+      //std::cout<<m_nConesInFrame<<" frames to run"<<"\n";
     }
     // Run if frame is full or if we have waited to long for the remaining messages
     if ((m_directionFrame.size()==m_nConesInFrame || duration>m_receiveTimeLimit)) { //!m_newFrame && objectId==m_surfaceId &&
@@ -139,8 +153,8 @@ else if(a_container.dataType() == opendlv::logic::perception::ObjectDistance::ID
     auto object = cluon::extractMessage<opendlv::logic::perception::ObjectDistance>(std::move(a_container));
     objectId = object.objectId();
     cluon::data::TimeStamp containerStamp = a_container.sampleTimeStamp();
-    double timeStamp = containerStamp.microseconds(); // Save timeStamp for sorting purposes;
-
+    double timeStamp = cluon::time::toMicroseconds(containerStamp); // Save timeStamp for sorting purposes;
+//std::cout<<"DetectConeLane received distance: "<<object.distance()<<" frame ID: "<<objectId<<" timeStamp: "<<timeStamp<<std::endl;
     if (m_newDistanceId) {
       m_distanceId = (objectId!=m_lastDistanceId)?(objectId):(-1); // Update object id if it is not remains from an already run frame
       m_newDistanceId=(m_distanceId !=-1)?(false):(true); // Set new id to false while collecting current frame id, or keep as true if current id is from an already run frame
@@ -159,16 +173,16 @@ else if(a_container.dataType() == opendlv::logic::perception::ObjectDistance::ID
   std::chrono::duration<double> dur = wait-m_distanceTimeReceived; // Duration since last message recieved to m_surfaceFrame
   double duration = (m_distanceId!=-1)?(dur.count()):(-1.0); // Duration value of type double in seconds OR -1 which prevents running the surface while ignoring messages from an already run frame
   if ((duration>m_receiveTimeLimit)&& (m_nConesInFrame>m_distanceFrame.size())) { //Only for debug
-    std::cout<<"DURATION TIME DISTANCE EXCEEDED: "<<duration<<std::endl;
-    std::cout<<m_distanceFrame.size()<<" distanceFrames to run"<<"\n";
-    std::cout<<m_nConesInFrame<<" frames to run"<<"\n";
+    std::cout<<m_distanceId<<" DURATION TIME DISTANCE EXCEEDED: "<<duration<<std::endl;
+    //std::cout<<m_distanceFrame.size()<<" distanceFrames to run"<<"\n";
+    //std::cout<<m_nConesInFrame<<" frames to run"<<"\n";
   }
   // Run if frame is full or if we have waited to long for the remaining messages
   if ((m_distanceFrame.size()==m_nConesInFrame || duration>m_receiveTimeLimit)) { //!m_newFrame && objectId==m_surfaceId &&
     m_distanceOK=true;
     //std::cout<<m_distanceFrame.size()<<" distanceFrames to run"<<"\n";
     //std::cout<<m_distanceFrameBuffer.size()<<" distanceFrames in buffer"<<"\n";
-    /*std::cout<<"m_distanceOK"<<"\n";*/
+    //std::cout<<"m_distanceOK"<<"\n";
   }
 }
 
@@ -179,15 +193,14 @@ else if(a_container.dataType() == opendlv::logic::perception::ObjectDistance::ID
       auto object = cluon::extractMessage<opendlv::logic::perception::ObjectType>(std::move(a_container));
       objectId = object.objectId();
       cluon::data::TimeStamp containerStamp = a_container.sampleTimeStamp();
-      double timeStamp = containerStamp.microseconds(); // Save timeStamp for sorting purposes;
-
+      double timeStamp = cluon::time::toMicroseconds(containerStamp); // Save timeStamp for sorting purposes;
+      //std::cout<<"DetectConeLane received type: "<<object.type()<<" frame ID: "<<objectId<<" m_typeId: "<<m_typeId<<" timeStamp: "<<timeStamp<<std::endl;
       if (m_newTypeId) {
         m_typeId = (objectId!=m_lastTypeId)?(objectId):(-1); // Update object id if it is not remains from an already run frame
         m_newTypeId=(m_typeId !=-1)?(false):(true); // Set new id to false while collecting current frame id, or keep as true if current id is from an already run frame
       }
 
       int type = object.type(); //Unpack message
-
       if (objectId == m_typeId) {
         m_typeFrame[timeStamp] = type;
         m_typeTimeReceived = std::chrono::system_clock::now(); //Store time for latest message recieved
@@ -198,16 +211,18 @@ else if(a_container.dataType() == opendlv::logic::perception::ObjectDistance::ID
     auto wait = std::chrono::system_clock::now(); // Time point now
     std::chrono::duration<double> dur = wait-m_typeTimeReceived; // Duration since last message recieved to m_surfaceFrame
     double duration = (m_typeId!=-1)?(dur.count()):(-1.0); // Duration value of type double in seconds OR -1 which prevents running the surface while ignoring messages from an already run frame
+    //std::cout<<"Frame count: "<< "m_nConesInFrame: "<< m_nConesInFrame<< " direction: "<<m_directionFrame.size()<<" distance: "<<m_distanceFrame.size()<<" type: "<<m_typeFrame.size()<<std::endl;
     if ((duration>m_receiveTimeLimit) && (m_nConesInFrame>m_typeFrame.size())) { //Only for debug
-      std::cout<<"DURATION TIME TYPE EXCEEDED: "<<duration<<std::endl;
-      std::cout<<m_typeFrame.size()<<" typeFrames to run"<<"\n";
-      std::cout<<m_nConesInFrame<<" frames to run"<<"\n";
+      std::cout<<m_typeId<<" DURATION TIME TYPE EXCEEDED: "<<duration<<std::endl;
+      //std::cout<<m_typeFrame.size()<<" typeFrames to run"<<"\n";
+      //std::cout<<m_nConesInFrame<<" frames to run"<<"\n";
     }
     // Run if frame is full or if we have waited to long for the remaining messages
     if ((m_typeFrame.size()==m_nConesInFrame || duration>m_receiveTimeLimit) && m_runOK) { //!m_newFrame && objectId==m_surfaceId &&
       if (m_directionOK && m_distanceOK) {
         m_runOK = false;
         //std::cout<<"m_runOK"<<std::endl;
+        std::cout<<"Frame count: "<< "m_nConesInFrame: "<< m_nConesInFrame<< " direction: "<<m_directionFrame.size()<<" distance: "<<m_distanceFrame.size()<<" type: "<<m_typeFrame.size()<<std::endl;
         std::thread coneCollector(&DetectConeLane::initializeCollection, this);
         coneCollector.detach();
       }
@@ -271,7 +286,7 @@ void DetectConeLane::initializeCollection(){
       m_newTypeId = true;
       m_runOK = true;
     }
-    std::cout<<"return 0"<<std::endl;
+    std::cout<<"Incoplete cone objects, not running this surface"<<std::endl;
     return;
   }
   // Unpack
@@ -322,9 +337,8 @@ void DetectConeLane::initializeCollection(){
   //std::cout << "Collection done " << extractedCones.rows() << " " << extractedCones.cols() << std::endl;
 //std::cout << "extractedCones: " << extractedCones.transpose() << std::endl;
   if(extractedCones.cols() > 0){
-    //std::cout << "Extracted Cones " << std::endl;
-    //std::cout << extractedCones << std::endl;
-
+    /*std::cout << "Extracted Cones: " << std::endl;
+    std::cout << extractedCones << std::endl;*/
     DetectConeLane::sortIntoSideArrays(extractedCones, nLeft, nRight, nSmall, nBig);
   } // End of if
   m_runOK = true;
@@ -400,8 +414,8 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     orderedConesLeft = DetectConeLane::orderAndFilterCones(sideLeft,location);
     orderedConesRight = DetectConeLane::orderAndFilterCones(sideRight,location);
   }else{
-    orderedConesLeft = DetectConeLane::orderCones(sideLeft,location);
-    orderedConesRight = DetectConeLane::orderCones(sideRight,location);
+    orderedConesLeft = sideLeft;//DetectConeLane::orderCones(sideLeft,location);
+    orderedConesRight = sideRight;//DetectConeLane::orderCones(sideRight,location);
   }
 
 
@@ -421,7 +435,13 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   if(leftIsLong)
   {
     Eigen::ArrayXXf tmpLongSide = orderedConesLeft;
-    Eigen::ArrayXXf tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesLeft, orderedConesRight, location, m_coneWidthSeparationThreshold,  m_guessDistance, false);
+    Eigen::ArrayXXf tmpShortSide;
+    if (!m_fakeSlamActivated) {
+      tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesLeft, orderedConesRight, location, m_coneWidthSeparationThreshold,  m_guessDistance, false);
+    }
+    else{
+      tmpShortSide=orderedConesRight;
+    }
 
     longSide.resize(tmpLongSide.rows(),tmpLongSide.cols());
     longSide = tmpLongSide;
@@ -432,8 +452,13 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   else
   {
     Eigen::ArrayXXf tmpLongSide = orderedConesRight;
-    Eigen::ArrayXXf tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesRight, orderedConesLeft, location, m_coneWidthSeparationThreshold,  m_guessDistance, true);
-
+    Eigen::ArrayXXf tmpShortSide;
+    if (!m_fakeSlamActivated) {
+      tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesRight, orderedConesLeft, location, m_coneWidthSeparationThreshold,  m_guessDistance, true);
+    }
+    else{
+      tmpShortSide = orderedConesLeft;
+    }
     longSide.resize(tmpLongSide.rows(),tmpLongSide.cols());
     longSide = tmpLongSide;
 
@@ -442,7 +467,8 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   } // End of else
   //std::cout<<"longSide accepted cones: "<<longSide<<"\n";
   //std::cout<<"shortSide accepted cones: "<<shortSide<<"\n";
-
+  std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+  cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
 
   if(longSide.rows() > 1)
   {
@@ -457,8 +483,8 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
       opendlv::logic::perception::GroundSurfaceProperty surface;
       surface.surfaceId(m_surfaceId);
       surface.property("1");
-      m_od4.send(surface); //TODO: Sender stamps
-
+      m_od4.send(surface, sampleTime , m_senderStamp);
+      //std::cout<<"DetectConeLane send surface property: "<<" property: "<<1<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
       opendlv::logic::perception::GroundSurfaceArea surfaceArea;
       surfaceArea.surfaceId(m_surfaceId);
       surfaceArea.x1(1.0f);
@@ -469,8 +495,9 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
       surfaceArea.y3(0.0f);
       surfaceArea.x4(0.0f);
       surfaceArea.y4(0.0f);
-      m_od4.send(surfaceArea); //TODO: Sender stamps
+      m_od4.send(surfaceArea, sampleTime , m_senderStamp);
       //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
+      //std::cout<<"DetectConeLane send surface: "<<" x1: "<<1<<" y1: "<<0<<" x2: "<<1<<" y2: "<<0<<" x3: "<<0<<" y3: "<<0<<" x4: "<<0<<" y4 "<<0<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
       int rndmId = rand();
       while (m_surfaceId == rndmId){rndmId = rand();}
       m_surfaceId = rndmId;
@@ -492,6 +519,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
       surface.surfaceId(m_surfaceId);
       surface.property("1");
       m_od4.send(surface);
+      //std::cout<<"DetectConeLane send surface property: "<<" property: "<<1<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
 
       opendlv::logic::perception::GroundSurfaceArea surfaceArea;
       surfaceArea.surfaceId(m_surfaceId);
@@ -503,8 +531,11 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
       surfaceArea.y3(longSide(0,1)+1.5f*direction);
       surfaceArea.x4(longSide(0,0));
       surfaceArea.y4(longSide(0,1)+1.5f*direction);
-      m_od4.send(surfaceArea); //TODO: Sender stamps
+      m_od4.send(surfaceArea, sampleTime , m_senderStamp);
       //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
+      /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)+1.5f*direction<<" x4: "<<longSide(0,0)<<" y4 "<<longSide(0,1)+1.5f*direction<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
+      std::cout<<" senderStamp "<<m_senderStamp<<std::endl;*/
+
       int rndmId = rand();
       while (m_surfaceId == rndmId){rndmId = rand();}
       m_surfaceId = rndmId;
@@ -515,7 +546,8 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
       opendlv::logic::perception::GroundSurfaceProperty surface;
       surface.surfaceId(m_surfaceId);
       surface.property("1");
-      m_od4.send(surface); //TODO: Sender stamps
+      m_od4.send(surface, sampleTime , m_senderStamp);
+      //std::cout<<"DetectConeLane send surface property: "<<" property: "<<1<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
 
       opendlv::logic::perception::GroundSurfaceArea surfaceArea;
       surfaceArea.surfaceId(m_surfaceId);
@@ -527,7 +559,10 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
       surfaceArea.y3(longSide(0,1));
       surfaceArea.x4(shortSide(0,0));
       surfaceArea.y4(shortSide(0,1));
-      m_od4.send(surfaceArea); //TODO: Sender stamps
+      m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+      /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)<<" x4: "<<shortSide(0,0)<<" y4 "<<shortSide(0,1)<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
+      std::cout<<" senderStamp "<<m_senderStamp<<std::endl;*/
+
       //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
       int rndmId = rand();
       while (m_surfaceId == rndmId){rndmId = rand();}
@@ -1039,15 +1074,18 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
 {
   int nSurfaces = virtualPointsLong.rows()/2;
   //std::cout << "Sending " << nSurfaces << " surfaces" << std::endl;
-
+  std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+  cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
   opendlv::logic::perception::GroundSurfaceProperty surface;
   surface.surfaceId(m_surfaceId);
   std::string property = std::to_string(nSurfaces);
   surface.property(property);
-  m_od4.send(surface); //TODO: Sender stamps
-
+  m_od4.send(surface, sampleTime , m_senderStamp);
+  //std::cout<<"DetectConeLane send surface property: "<<" property: "<<nSurfaces<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
   for(int n = 0; n < nSurfaces; n++)
   {
+    tp = std::chrono::system_clock::now();
+    sampleTime = cluon::time::convert(tp);
     opendlv::logic::perception::GroundSurfaceArea surfaceArea;
     surfaceArea.surfaceId(m_surfaceId);
     surfaceArea.x1(virtualPointsLong(2*n,0));
@@ -1058,11 +1096,20 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
     surfaceArea.y3(virtualPointsLong(2*n+1,1));
     surfaceArea.x4(virtualPointsShort(2*n+1,0));
     surfaceArea.y4(virtualPointsShort(2*n+1,1));
-    m_od4.send(surfaceArea); //TODO: Sender stamps
+    m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+    /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<virtualPointsLong(2*n,0)<<" y1: "<<virtualPointsLong(2*n,1)<<" x2: "<<virtualPointsShort(2*n,0)<<" y2: "<<virtualPointsShort(2*n,1)<<" x3: "<<virtualPointsLong(2*n+1,0)<<" y3: "<<virtualPointsLong(2*n+1,1);
+    std::cout<<" x4: "<<virtualPointsShort(2*n+1,0)<<" y4 "<<virtualPointsShort(2*n+1,1)<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
+    if ((n == 0 )&& (virtualPointsLong(2*n,0) > 6)) {
+      std::cout<<" Sending wierd surface: "<< (virtualPointsLong(2*n,0)+virtualPointsShort(2*n,0))/2 <<" "<<(virtualPointsLong(2*n,1)+virtualPointsShort(2*n,1))/2 <<" "<<(virtualPointsLong(2*n+1,0)+virtualPointsShort(2*n+1,0))/2;
+      std::cout<<" "<<(virtualPointsLong(2*n+1,1)+virtualPointsShort(2*n+1,1))/2<<std::endl;
+    }*/
   } // End of for
   //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
   int rndmId = rand();
   while (m_surfaceId == rndmId){rndmId = rand();}
   m_surfaceId = rndmId;
+  m_tock = std::chrono::system_clock::now();
+  std::chrono::duration<double> dur = m_tock-m_tick;
+  m_newClock = true;
+  std::cout<<"DetectConelane Module Time: "<<dur.count()<<std::endl;
 } // End of sendMatchedContainer
-

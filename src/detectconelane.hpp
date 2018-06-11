@@ -61,12 +61,12 @@ class DetectConeLane {
 
   std::mutex m_stateMutex;
   cluon::OD4Session &m_od4;
+  int m_senderStamp;
   bool m_fakeSlamActivated;
   float m_guessDistance;
   float m_maxConeAngle;
   float m_coneWidthSeparationThreshold;
   float m_coneLengthSeparationThreshold;
-  uint16_t m_cid;
   float m_receiveTimeLimit;
   bool m_newFrame;
   bool m_directionOK;
@@ -96,7 +96,9 @@ class DetectConeLane {
   std::mutex m_distanceMutex = {};
   std::mutex m_typeMutex = {};
   int m_surfaceId;
-
+  std::chrono::time_point<std::chrono::system_clock> m_tick;
+  std::chrono::time_point<std::chrono::system_clock> m_tock;
+  bool m_newClock;
   const double DEG2RAD = 0.017453292522222; // PI/180.0
 
 };
