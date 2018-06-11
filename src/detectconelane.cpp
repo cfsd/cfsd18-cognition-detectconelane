@@ -26,7 +26,7 @@
 DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_stateMutex()
 , m_od4(od4)
-, m_senderStamp{(commandlineArguments["senderStamp"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["senderStamp"]))) : (211)}
+, m_senderStamp{(commandlineArguments["id"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["id"]))) : (211)}
 , m_fakeSlamActivated{(commandlineArguments["fakeSlamActivated"].size() != 0) ? (std::stoi(commandlineArguments["fakeSlamActivated"])==1) : (false)}
 , m_guessDistance{(commandlineArguments["guessDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["guessDistance"]))) : (3.0f)}
 , m_maxConeAngle{(commandlineArguments["maxConeAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeAngle"]))) : (1.570796325f)}
