@@ -1,0 +1,31 @@
+os: linux
+language: cpp
+sudo: required
+branches:
+  only:
+  - master
+  - pre-release
+services:
+- docker
+addons:
+  apt:
+    update: true
+env:
+  global:
+  - COMMIT=${TRAVIS_COMMIT::7}
+  - DOCKERHUB='chalmersfsd'
+  - IMAGE=`echo ${TRAVIS_REPO_SLUG#*/}`
+  - secure: xMSQfz5epXl+bAVDApziAhnpcYlRbSdVS5207/H19Vmc1lwqplwaggy4ZpDOn3BWFDihlLxHaF1OKUfShSjfWoOJyIwyM9Ji5GUXxKV6pd3ilpY7CqZphqCjyUOyRKziPlG2Sh6QWT1MBuE7zDM8FrnLATvMCSMW7PjSB3RaNfqy+/Wkpe/EIEtX+tgRU6c0CSBGrqkb2Zt4DQ8cOfoENxkBq9+dbvJ0n+hMUTAXcSW7ZsLol916zGKmo1u4Qbdrt32FwrM16zFUMkYC+cCqoJJJklWETZA0nppCCE8qztfgN3kQAlK/RlhSabXJaDP32RCxuGXpOSbY5pbeD3ZXSYisc9xmrXbBqx3uuzZlKbC+l/rCpqwWKkPMILcWIhXsLH5rp4JRQYsvyon0VuIHVkvM6hajSyl4GHUj6GAKDSptrH1qS0RlyOkVMNDgenU6bK8kHRJHIEw4uJJkwZD3z8ondAuYheuuSExkfiDt9S9OSr+LBPisMjI1vvRxoeW5MZvesNQNPODPAKD/VJM0DajMJkKwnulCavwQA+BRFJBDdK/06XZgHXHTWJlDdqLIkoM7kRE+cfBMSXeLqMYHxqZbc9sIoiyXWpQMa99K5WAHK+mm5yrgkJwZKQgzvuQA8/y7AWorSZr/ezevKy5opqmMpNITLnLB/Fb2MhpJimk=
+  - secure: vLOXwy0xW/gTd0UDmNOiuB4zCf9ckxLnhhAvVoou4N4nCCwpWRHXmnh7ESdEqlEZxAYWDkNAVTLn3GuTTpRuLibOq7oTmy0KKaymkfbilP5+ptw/H2HvWNrxqrCLuE7tYzTN5nV26CXscf/NnZDilOM9tneE5flWgZU1n8DSUITzPaE70boC0p1kPPUhwHLwVT4vwqO/JkAX7XLXd4KRbiWWOEIEv2f9rDK0d+avgkJYRbjrqH75lNaMNA9wBFJ6QdUpabGgCjGEt8FqZIGvMGFmzFtgG5XfrB4UjlJbwceTGxv5VLJXVAf8EcXqPz5i+/a96hny5XU/8Cw+RoDhdFFLAvTvWFNK/YCrLBHGDrgtwycTbV/HvzyTNl15esjtgcogujZ8BTqwKE/VYl84S3IUl/9u8qlSZz4tw36V2l7nec0WSchVxOrOX3549J03qvILfoKrd+ubqA2wqDFgjPcBcx2bBW+h3l6cPnGpo7kCAYP/RX8g7+/3/GIbvgowIt0emTSZ9Se7v1fVh2wXutT2BlXJh3RBNdwUGiSGQO59GqUvQHvAePEypqbdvqChkYdBO2/n9Ux4yYTUcaGdadpAUVbN4pmksMBTRuIGZw9O4jDyXb3H9W5w/WS2IXwG7uvAvHotC8nHdcoy0spdVzxZZkMXOrAGMlYN4x92yt8=
+install:
+- docker build -f Dockerfile.amd64 -t ${IMAGE}:${COMMIT} .
+script: skip
+after_success:
+- docker --version
+- echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+- docker tag ${IMAGE}:${COMMIT} ${DOCKERHUB}/${IMAGE}:${COMMIT}
+- docker push ${DOCKERHUB}/${IMAGE}:${COMMIT}
+notifications:
+  email:
+    on_success: never
+    on_failure: never
