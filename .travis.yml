@@ -26,6 +26,7 @@ after_success:
 - echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 - docker tag ${IMAGE}:${BRANCH}-${COMMIT} ${DOCKERHUB}/${IMAGE}:${BRANCH}-${COMMIT}
 - docker push ${DOCKERHUB}/${IMAGE}:${BRANCH}-${COMMIT}
+- echo "${DOCKERHUB}/${IMAGE}:${BRANCH}-${COMMIT}"
 notifications:
   email:
     on_success: never
