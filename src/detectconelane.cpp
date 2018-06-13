@@ -82,6 +82,46 @@ void DetectConeLane::tearDown()
 }
 
 
+void DetectConeLane::recieveCombinedMessage(std::map<int,ConePackage> currentFrame){
+  Eigen::MatrixXd extractedCones(3,currentFrame.size());
+  std::map<int,ConePackage>::iterator it;
+  int coneIndex = 0;
+  it = currentFrame.begin();
+  while(it != currentFrame.end()){
+    auto direction = std::get<0>(it->second);
+    auto distance = std::get<1>(it->second);
+    auto type = std::get<2>(it->second);
+    extractedCones(0,coneIndex) = direction.azimuthAngle();
+    extractedCones(1,coneIndex) = distance.distance();
+    extractedCones(2,coneIndex) = type.type();
+    coneIndex++;
+    it++;
+  }
+  std::cout << extractedCones << std::endl;
+
+  int nLeft = 0;
+  int nRight = 0;
+  int nSmall = 0;
+  int nBig = 0;
+
+  for (int i = 0; i < extractedCones.cols(); i++) {
+    int type = static_cast<int>(extractedCones(2,i));
+    if(type == 1){ nLeft++; }
+    else if(type == 2){ nRight++; }
+    else if(type == 3){ nSmall++; }
+    else if(type == 4){ nBig++; }
+    else
+    {
+      std::cout << "WARNING! Object " << i << " has invalid cone type: " << type << std::endl;
+    } // End of else
+  } // End of for
+
+  if(extractedCones.cols() > 0){
+    DetectConeLane::sortIntoSideArrays(extractedCones, nLeft, nRight, nSmall, nBig);
+  }
+}
+
+
 void DetectConeLane::nextContainer(cluon::data::Envelope &a_container)
 {
 if(a_container.dataType() == opendlv::logic::perception::ObjectProperty::ID()){

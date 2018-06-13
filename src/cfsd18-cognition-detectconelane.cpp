@@ -18,6 +18,7 @@
 #include "cluon-complete.hpp"
 #include "opendlv-standard-message-set.hpp"
 #include "detectconelane.hpp"
+#include "collector.hpp"
 #include <Eigen/Dense>
 #include <cstdint>
 #include <tuple>
@@ -25,6 +26,8 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <tuple>
+typedef std::tuple<opendlv::logic::perception::ObjectDirection,opendlv::logic::perception::ObjectDistance,opendlv::logic::perception::ObjectType> ConePackage;
 
 int32_t main(int32_t argc, char **argv) {
   int32_t retCode{0};
@@ -41,16 +44,22 @@ int32_t main(int32_t argc, char **argv) {
     cluon::data::Envelope data;
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
     DetectConeLane detectconelane(commandlineArguments,od4);
+    int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(10);
 
-    auto envelopeRecieved{[&laner = detectconelane](cluon::data::Envelope &&envelope)
+    Collector collector(detectconelane,gatheringTimeMs,3);
+    uint32_t detectconeStamp = (commandlineArguments.count("detectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["detectConeId"]))):(231); //231: Simulation is default
+
+    auto coneEnvelope{[senderStamp = detectconeStamp,&collector](cluon::data::Envelope &&envelope)
       {
-        laner.nextContainer(envelope);
+        if(envelope.senderStamp() == senderStamp){
+          collector.CollectCones(envelope);
+        }
       }
     };
-    od4.dataTrigger(opendlv::logic::perception::ObjectProperty::ID(),envelopeRecieved);
-    od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),envelopeRecieved);
-    od4.dataTrigger(opendlv::logic::perception::ObjectDistance::ID(),envelopeRecieved);
-    od4.dataTrigger(opendlv::logic::perception::ObjectType::ID(),envelopeRecieved);
+    od4.dataTrigger(opendlv::logic::perception::ObjectProperty::ID(),coneEnvelope);
+    od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),coneEnvelope);
+    od4.dataTrigger(opendlv::logic::perception::ObjectDistance::ID(),coneEnvelope);
+    od4.dataTrigger(opendlv::logic::perception::ObjectType::ID(),coneEnvelope);
 
     // Just sleep as this microservice is data driven.
     using namespace std::literals::chrono_literals;

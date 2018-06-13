@@ -31,6 +31,7 @@
 #include <chrono>
 #include <mutex>
 #include <condition_variable>
+typedef std::tuple<opendlv::logic::perception::ObjectDirection,opendlv::logic::perception::ObjectDistance,opendlv::logic::perception::ObjectType> ConePackage;
 
 class DetectConeLane {
  public:
@@ -38,6 +39,7 @@ class DetectConeLane {
   DetectConeLane(DetectConeLane const &) = delete;
   DetectConeLane &operator=(DetectConeLane const &) = delete;
   virtual ~DetectConeLane();
+  void recieveCombinedMessage(std::map<int,ConePackage>);
   virtual void nextContainer(cluon::data::Envelope &);
 
  private:
