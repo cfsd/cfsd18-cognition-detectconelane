@@ -83,6 +83,7 @@ void DetectConeLane::tearDown()
 
 
 void DetectConeLane::recieveCombinedMessage(std::map<int,ConePackage> currentFrame){
+  m_tick = std::chrono::system_clock::now();
   Eigen::MatrixXd extractedCones(3,currentFrame.size());
   std::map<int,ConePackage>::iterator it;
   int coneIndex = 0;
@@ -352,7 +353,7 @@ void DetectConeLane::initializeCollection(){
     extractedCones(2,I) = static_cast<double>(tpe);
     I++;
   }
-  //std::cout<<"extractedCones"<<extractedCones<<std::endl;
+  std::cout<<"extractedCones"<<extractedCones<<std::endl;
   int nLeft = 0;
   int nRight = 0;
   int nSmall = 0;
@@ -441,13 +442,14 @@ void DetectConeLane::sortIntoSideArrays(Eigen::MatrixXd extractedCones, int nLef
   Eigen::MatrixXf coneRight_f = coneRight.cast <float> ();
   Eigen::ArrayXXf sideLeft = coneLeft_f.transpose().array();
   Eigen::ArrayXXf sideRight = coneRight_f.transpose().array();
+  std::cout<<"sideLeft: "<<sideLeft<<std::endl;
+  std::cout<<"sideRight: "<<sideRight<<std::endl;
 
   DetectConeLane::generateSurfaces(sideLeft, sideRight, location);
 } // End of sortIntoSideArrays
 
 
 void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf sideRight, Eigen::ArrayXXf location){
-
   Eigen::ArrayXXf orderedConesLeft;
   Eigen::ArrayXXf orderedConesRight;
   if (!m_fakeSlamActivated) {
@@ -457,7 +459,6 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     orderedConesLeft = sideLeft;//DetectConeLane::orderCones(sideLeft,location);
     orderedConesRight = sideRight;//DetectConeLane::orderCones(sideRight,location);
   }
-
 
   float pathLengthLeft = DetectConeLane::findTotalPathLength(orderedConesLeft);
   float pathLengthRight = DetectConeLane::findTotalPathLength(orderedConesRight);
@@ -476,13 +477,12 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   {
     Eigen::ArrayXXf tmpLongSide = orderedConesLeft;
     Eigen::ArrayXXf tmpShortSide;
-    if (!m_fakeSlamActivated) {
+    if (!m_fakeSlamActivated || orderedConesRight.rows()==0) {
       tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesLeft, orderedConesRight, location, m_coneWidthSeparationThreshold,  m_guessDistance, false);
     }
     else{
       tmpShortSide=orderedConesRight;
     }
-
     longSide.resize(tmpLongSide.rows(),tmpLongSide.cols());
     longSide = tmpLongSide;
 
@@ -493,7 +493,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   {
     Eigen::ArrayXXf tmpLongSide = orderedConesRight;
     Eigen::ArrayXXf tmpShortSide;
-    if (!m_fakeSlamActivated) {
+    if (!m_fakeSlamActivated|| orderedConesLeft.rows()==0) {
       tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesRight, orderedConesLeft, location, m_coneWidthSeparationThreshold,  m_guessDistance, true);
     }
     else{
@@ -505,6 +505,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     shortSide.resize(tmpShortSide.rows(),tmpShortSide.cols());
     shortSide = tmpShortSide;
   } // End of else
+
   //std::cout<<"longSide accepted cones: "<<longSide<<"\n";
   //std::cout<<"shortSide accepted cones: "<<shortSide<<"\n";
   std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
@@ -514,6 +515,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   {
     // findSafeLocalPath ends with sending surfaces
     DetectConeLane::findSafeLocalPath(longSide, shortSide);
+    //std::cout<<"DEBUG7"<<std::endl;
   }
   else
   {
@@ -649,7 +651,6 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
   // Divide the longest side into segments of equal length
   Eigen::ArrayXXf virtualPointsLong = DetectConeLane::placeEquidistantPoints(longSide,true,nMidPoints,-1);
   Eigen::ArrayXXf virtualPointsShort(nMidPoints,2);
-
   float shortestDist, tmpDist, factor;
   int closestConeIndex = -100;
 
@@ -671,56 +672,67 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
     // Check if one of the two segments next to the cone has a perpendicular line to the long side point. If so, place the short side point
     // on that place of the segment. If not, place the point on the cone. If it's the first or last cone there is only one segment to check
     if(closestConeIndex == 0)
-    {
+    {//std::cout<<"DEBUG15"<<std::endl;
 
       if(shortSide.rows() > 1)
-      {
+      {//std::cout<<"DEBUG16"<<std::endl;
         factor = DetectConeLane::findFactorToClosestPoint(shortSide.row(0),shortSide.row(1),virtualPointsLong.row(i));
+        //std::cout<<"DEBUG17"<<std::endl;
       }
 
       if(shortSide.rows() > 1 && factor > 0 && factor <= 1)
-      {
+      {//std::cout<<"DEBUG18"<<std::endl;
         virtualPointsShort.row(i) = shortSide.row(0)+factor*(shortSide.row(1)-shortSide.row(0));
+        //std::cout<<"DEBUG19"<<std::endl;
       }
       else
-      {
+      {//std::cout<<"DEBUG20"<<std::endl;
         virtualPointsShort.row(i) = shortSide.row(0);
+        //std::cout<<"DEBUG21"<<std::endl;
       } // End of else
     }
     else if(closestConeIndex == nConesShort-1)
-    {
+    {//std::cout<<"DEBUG22"<<std::endl;
       factor = DetectConeLane::findFactorToClosestPoint(shortSide.row(nConesShort-2),shortSide.row(nConesShort-1),virtualPointsLong.row(i));
+      //std::cout<<"DEBUG23"<<std::endl;
       if(factor > 0 && factor <= 1)
-      {
+      {//std::cout<<"DEBUG24"<<std::endl;
         virtualPointsShort.row(i) = shortSide.row(nConesShort-2)+factor*(shortSide.row(nConesShort-1)-shortSide.row(nConesShort-2));
+        //std::cout<<"DEBUG25"<<std::endl;
       }
       else
-      {
+      { //std::cout<<"DEBUG26"<<std::endl;
         virtualPointsShort.row(i) = shortSide.row(nConesShort-1);
+        //std::cout<<"DEBUG27"<<std::endl;
       } // End of else
     }
     else
-    {
+    { //std::cout<<"DEBUG28"<<std::endl;
       factor = DetectConeLane::findFactorToClosestPoint(shortSide.row(closestConeIndex-1),shortSide.row(closestConeIndex),virtualPointsLong.row(i));
+      //std::cout<<"DEBUG29"<<std::endl;
       if(factor > 0 && factor <= 1)
-      {
+      {//std::cout<<"DEBUG30"<<std::endl;
         virtualPointsShort.row(i) = shortSide.row(closestConeIndex-1)+factor*(shortSide.row(closestConeIndex)-shortSide.row(closestConeIndex-1));
+        //std::cout<<"DEBUG31"<<std::endl;
       }
       else
-      {
+      {//std::cout<<"DEBUG32"<<std::endl;
         factor = DetectConeLane::findFactorToClosestPoint(shortSide.row(closestConeIndex),shortSide.row(closestConeIndex+1),virtualPointsLong.row(i));
+        //std::cout<<"DEBUG33"<<std::endl;
         if(factor > 0 && factor <= 1)
-        {
+        {//std::cout<<"DEBUG34"<<std::endl;
           virtualPointsShort.row(i) = shortSide.row(closestConeIndex)+factor*(shortSide.row(closestConeIndex+1)-shortSide.row(closestConeIndex));
+          //std::cout<<"DEBUG35"<<std::endl;
         }
         else
-        {
+        {//std::cout<<"DEBUG36"<<std::endl;
           virtualPointsShort.row(i) = shortSide.row(closestConeIndex);
+          //std::cout<<"DEBUG37"<<std::endl;
         } // End of else
       } // End of else
     } // End of else
   } // End of for
-
+  //std::cout<<"DEBUG14"<<std::endl;
   Eigen::ArrayXXf virtualPointsLongFinal, virtualPointsShortFinal;
   if(virtualPointsLong.rows() % 2 == 0)
   {
@@ -746,7 +758,7 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
     virtualPointsLongFinal.bottomRows(1) = virtualPointsLong.row(nLong-1) + 0.01*lastVecLong;
     virtualPointsShortFinal.bottomRows(1) = virtualPointsShort.row(nShort-1);
   } // End of else
-
+  //std::cout<<"DEBUG8"<<std::endl;
   DetectConeLane::sendMatchedContainer(virtualPointsLongFinal, virtualPointsShortFinal);
 
 } // End of findSafeLocalPath
