@@ -25,12 +25,10 @@
 #include <Eigen/Dense>
 #include <fstream>
 #include <iostream>
-#include <thread>
 #include <cmath>
 #include <map>
 #include <chrono>
 #include <mutex>
-#include <condition_variable>
 typedef std::tuple<opendlv::logic::perception::ObjectDirection,opendlv::logic::perception::ObjectDistance,opendlv::logic::perception::ObjectType> ConePackage;
 
 class DetectConeLane {
@@ -40,13 +38,11 @@ class DetectConeLane {
   DetectConeLane &operator=(DetectConeLane const &) = delete;
   virtual ~DetectConeLane();
   void receiveCombinedMessage(std::map<int,ConePackage>);
-  virtual void nextContainer(cluon::data::Envelope &);
 
  private:
   void setUp();
   void tearDown();
 
-  void initializeCollection();
   void sortIntoSideArrays(Eigen::MatrixXd, int, int, int, int);
   void generateSurfaces(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf);
   Eigen::MatrixXd Spherical2Cartesian(double, double, double);
@@ -61,7 +57,6 @@ class DetectConeLane {
   float findFactorToClosestPoint(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf);
   void sendMatchedContainer(Eigen::ArrayXXf, Eigen::ArrayXXf);
 
-  std::mutex m_stateMutex;
   cluon::OD4Session &m_od4;
   int m_senderStamp;
   bool m_fakeSlamActivated;
@@ -69,35 +64,6 @@ class DetectConeLane {
   float m_maxConeAngle;
   float m_coneWidthSeparationThreshold;
   float m_coneLengthSeparationThreshold;
-  float m_receiveTimeLimit;
-  bool m_newFrame;
-  bool m_directionOK;
-  bool m_distanceOK;
-  bool m_runOK;
-  std::map< double, float > m_directionFrame;
-  std::map< double, float > m_distanceFrame;
-  std::map< double, int > m_typeFrame;
-  std::map< double, float > m_directionFrameBuffer;
-  std::map< double, float > m_distanceFrameBuffer;
-  std::map< double, int > m_typeFrameBuffer;
-  int m_lastDirectionId;
-  int m_lastDistanceId;
-  int m_lastTypeId;
-  bool m_newDirectionId;
-  bool m_newDistanceId;
-  bool m_newTypeId;
-  std::chrono::time_point<std::chrono::system_clock> m_directionTimeReceived;
-  std::chrono::time_point<std::chrono::system_clock> m_distanceTimeReceived;
-  std::chrono::time_point<std::chrono::system_clock> m_typeTimeReceived;
-  uint64_t m_nConesInFrame;
-  int m_objectPropertyId;
-  int m_directionId;
-  int m_distanceId;
-  int m_typeId;
-  std::mutex m_directionMutex = {};
-  std::mutex m_distanceMutex = {};
-  std::mutex m_typeMutex = {};
-  int m_surfaceId;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   bool m_newClock;
