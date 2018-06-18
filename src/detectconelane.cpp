@@ -58,6 +58,7 @@ void DetectConeLane::tearDown()
 void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame){
   m_tick = std::chrono::system_clock::now();
   Eigen::MatrixXd extractedCones(3,currentFrame.size());
+  m_surfaces.clear();
   std::reverse_iterator<std::map<int,ConePackage>::iterator> it;
   int coneIndex = 0;
   it = currentFrame.rbegin();
@@ -71,7 +72,7 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
     coneIndex++;
     it++;
   }
-
+  m_rawCones = extractedCones;
   int nLeft = 0;
   int nRight = 0;
   int nSmall = 0;
@@ -268,6 +269,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
         surfaceArea.x4(longSide(0,0));
         surfaceArea.y4(longSide(0,1)+1.5f*direction);
         m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+        m_surfaces.push_back(surfaceArea);
         /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)+1.5f*direction<<" x4: "<<longSide(0,0)<<" y4 "<<longSide(0,1)+1.5f*direction<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
         */
       }
@@ -285,6 +287,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
         surfaceArea.x4(shortSide(0,0));
         surfaceArea.y4(shortSide(0,1));
         m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+        m_surfaces.push_back(surfaceArea);
         /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)<<" x4: "<<shortSide(0,0)<<" y4 "<<shortSide(0,1)<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
         */
 
@@ -807,6 +810,7 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
     surfaceArea.x4(virtualPointsShort(2*n+1,0));
     surfaceArea.y4(virtualPointsShort(2*n+1,1));
     m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+    m_surfaces.push_back(surfaceArea);
     /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<virtualPointsLong(2*n,0)<<" y1: "<<virtualPointsLong(2*n,1)<<" x2: "<<virtualPointsShort(2*n,0)<<" y2: "<<virtualPointsShort(2*n,1)<<" x3: "<<virtualPointsLong(2*n+1,0)<<" y3: "<<virtualPointsLong(2*n+1,1);
     std::cout<<" x4: "<<virtualPointsShort(2*n+1,0)<<" y4 "<<virtualPointsShort(2*n+1,1)<<" frame ID: "<<nSurfaces-n-1<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
     */
@@ -817,3 +821,11 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
   m_newClock = true;
   std::cout<<"DetectConelane Module Time: "<<dur.count()<<std::endl;
 } // End of sendMatchedContainer
+
+std::vector<opendlv::logic::perception::GroundSurfaceArea> DetectConeLane::drawSurfaces(){
+  return m_surfaces;
+}
+
+Eigen::MatrixXd DetectConeLane::drawRawCones(){
+  return m_rawCones;
+}

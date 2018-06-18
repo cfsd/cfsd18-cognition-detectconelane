@@ -38,6 +38,8 @@ class DetectConeLane {
   DetectConeLane &operator=(DetectConeLane const &) = delete;
   virtual ~DetectConeLane();
   void receiveCombinedMessage(std::map<int,ConePackage>);
+  std::vector<opendlv::logic::perception::GroundSurfaceArea> drawSurfaces();
+  Eigen::MatrixXd drawRawCones();
 
  private:
   void setUp();
@@ -64,6 +66,8 @@ class DetectConeLane {
   float m_maxConeAngle;
   float m_coneWidthSeparationThreshold;
   float m_coneLengthSeparationThreshold;
+  Eigen::MatrixXd m_rawCones = {};
+  std::vector<opendlv::logic::perception::GroundSurfaceArea> m_surfaces = {};
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   bool m_newClock;
