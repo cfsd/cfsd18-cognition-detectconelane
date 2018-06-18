@@ -19,16 +19,21 @@
 
 #include "collector.hpp"
 
-Collector::Collector(DetectConeLane &detectconelane,int timeDiffMilliseconds,int packetSize) : 
+Collector::Collector(DetectConeLane &detectconelane,int timeOutMs, int separationTimeMs, int packetSize) :
     m_module(detectconelane),
     m_packetSize(packetSize),
-    m_timeDiffMilliseconds(timeDiffMilliseconds)
+    m_timeOutMs(timeOutMs),
+    m_separationTimeMs(separationTimeMs),
+    m_timeReceived(),
+    m_tick{},
+    m_tock{}
 {
 }
 
 void Collector::CollectCones(cluon::data::Envelope data){
     cluon::data::TimeStamp ts = data.sampleTimeStamp();
     int64_t delta = cluon::time::deltaInMicroseconds(ts,m_currentFrameTime);
+    m_timeReceived = std::chrono::system_clock::now();
     if(std::abs(delta)<1){
         if(data.dataType() == opendlv::logic::perception::ObjectDirection::ID()){
             opendlv::logic::perception::ObjectDirection direction = cluon::extractMessage<opendlv::logic::perception::ObjectDirection>(std::move(data));
@@ -86,6 +91,7 @@ void Collector::CollectCones(cluon::data::Envelope data){
     }
     else if(m_newFrame)
     {
+        m_tick = std::chrono::system_clock::now();
         m_numberOfItems = 1;
         m_currentFrame.clear();
         m_envelopeCount.clear();
@@ -118,7 +124,7 @@ void Collector::CollectCones(cluon::data::Envelope data){
             m_currentFrame[id] = conePacket;
             m_envelopeCount[id]=1;
             m_numberOfItems = (m_numberOfItems<=id)?(id+1):(m_numberOfItems);
-        }        
+        }
         std::thread coneCollector (&Collector::InitializeCollection,this); //just sleep instead maybe since this is unclear how it works
         coneCollector.detach();
     }
@@ -136,12 +142,17 @@ auto start = std::chrono::system_clock::now();
   {
     auto now = std::chrono::system_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - start);
+    std::chrono::duration<double> dur = now-m_timeReceived;
     if(m_messageCount == m_numberOfItems*m_packetSize){
         sleep = false;
     }
-    if(elapsed.count() > m_timeDiffMilliseconds*1000){
+    if(elapsed.count() > m_timeOutMs*1000){
         std::cout << "Timed out" << std::endl;
         sleep = false;
+    }
+    if (dur.count()>m_separationTimeMs*0.001) {
+      std::cout << "Separation time exceeded: " <<" dur.count(): "<<dur.count()<<" m_separationTimeMs*0.001 "<<m_separationTimeMs*0.001<<std::endl;
+      sleep = false;
     }
   }
   GetCompleteFrame();
@@ -151,16 +162,33 @@ auto start = std::chrono::system_clock::now();
 
 void Collector::GetCompleteFrame(){
     std::map<int,int>::iterator it2 = m_envelopeCount.begin();
+    std::map<int,ConePackage>::iterator it = m_currentFrame.begin();
+    std::cout<<"m_envelopeCount.size() = "<<m_envelopeCount.size()<<std::endl;
+    std::cout<<"m_currentFrame.size() = "<<m_currentFrame.size()<<std::endl;
+    std::map<int,ConePackage> currentFrameCopy = m_currentFrame;
     while(it2 != m_envelopeCount.end()){
+      auto direction = std::get<0>(it->second);
+      auto distance = std::get<1>(it->second);
+      auto type = std::get<2>(it->second);
+      auto first = it->first;
+      std::cout<<"ID: "<<first<<" dir: "<<direction.azimuthAngle()<<" dis: "<<distance.distance()<<" type: "<<type.type()<<std::endl;
         if(it2->second != static_cast<int>(m_packetSize)){
-            m_currentFrame.erase(it2->first);
+            currentFrameCopy.erase(it2->first);
             std::cout << "Incomplete frame with id " << it2->first << " removed" << std::endl;
         }
         it2++;
+        it++;
+    }
+    if (m_currentFrame.size() != currentFrameCopy.size()) {
+      m_currentFrame = currentFrameCopy;
     }
 }
 
 void Collector::SendFrame(){
     std::cout << "sending " << m_currentFrame.size() << " cones" << std::endl;
-    m_module.recieveCombinedMessage(m_currentFrame);
+    m_module.receiveCombinedMessage(m_currentFrame);
+
+    m_tock = std::chrono::system_clock::now();
+    std::chrono::duration<double> dur = m_tock-m_tick;
+    std::cout<<"Collector Module Time: "<<dur.count()<<std::endl;
 }

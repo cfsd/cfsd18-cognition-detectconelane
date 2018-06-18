@@ -23,6 +23,7 @@
 #include <iostream>
 #include <cmath>
 #include <vector>
+#include <chrono>
 #include <Eigen/Dense>
 #include "opendlv-standard-message-set.hpp"
 #include "detectconelane.hpp"
@@ -33,7 +34,7 @@ typedef std::tuple<opendlv::logic::perception::ObjectDirection,opendlv::logic::p
 
 class Collector{
   public:
-    Collector(DetectConeLane &detectconelane, int, int);
+    Collector(DetectConeLane &detectconelane, int, int, int);
     ~Collector() = default;
     void CollectCones(cluon::data::Envelope data);
     void InitializeCollection();
@@ -42,14 +43,18 @@ class Collector{
 
   private:
     cluon::data::TimeStamp m_currentFrameTime = {};
-    std::map<int,ConePackage> m_currentFrame = {}; 
+    std::map<int,ConePackage> m_currentFrame = {};
     std::map<int,int> m_envelopeCount = {};
     bool m_newFrame = true;
     bool m_processing = false;
     uint32_t m_messageCount = 0;
     DetectConeLane &m_module;
     uint32_t m_packetSize;
-    int m_timeDiffMilliseconds;
+    int m_timeOutMs;
+    int m_separationTimeMs;
+    std::chrono::time_point<std::chrono::system_clock> m_timeReceived;
+    std::chrono::time_point<std::chrono::system_clock> m_tick;
+    std::chrono::time_point<std::chrono::system_clock> m_tock;
     uint32_t m_numberOfItems = 1;
 };
 

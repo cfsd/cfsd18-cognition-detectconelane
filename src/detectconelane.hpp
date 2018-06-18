@@ -39,7 +39,7 @@ class DetectConeLane {
   DetectConeLane(DetectConeLane const &) = delete;
   DetectConeLane &operator=(DetectConeLane const &) = delete;
   virtual ~DetectConeLane();
-  void recieveCombinedMessage(std::map<int,ConePackage>);
+  void receiveCombinedMessage(std::map<int,ConePackage>);
   virtual void nextContainer(cluon::data::Envelope &);
 
  private:
@@ -101,6 +101,7 @@ class DetectConeLane {
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   bool m_newClock;
+  std::mutex m_sendMutex;
   const double DEG2RAD = 0.017453292522222; // PI/180.0
 
 };

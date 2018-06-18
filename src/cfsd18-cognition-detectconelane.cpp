@@ -44,9 +44,10 @@ int32_t main(int32_t argc, char **argv) {
     cluon::data::Envelope data;
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
     DetectConeLane detectconelane(commandlineArguments,od4);
-    int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(10);
-
-    Collector collector(detectconelane,gatheringTimeMs,3);
+    int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(60);
+    int separationTimeMs = (commandlineArguments.count("separationTimeMs")>0)?(std::stoi(commandlineArguments["separationTimeMs"])):(5);
+    std::cout<<"separationTimeMs in main: "<<separationTimeMs<<std::endl;
+    Collector collector(detectconelane,gatheringTimeMs,separationTimeMs,3);
     uint32_t detectconeStamp = (commandlineArguments.count("detectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["detectConeId"]))):(231); //231: Simulation is default
 
     auto coneEnvelope{[senderStamp = detectconeStamp,&collector](cluon::data::Envelope &&envelope)

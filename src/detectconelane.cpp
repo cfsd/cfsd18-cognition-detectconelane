@@ -61,6 +61,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_tick{}
 , m_tock{}
 , m_newClock{true}
+, m_sendMutex()
 {
   m_surfaceId = rand();
   std::cout<<"DetectConeLane set up with "<<commandlineArguments.size()<<" commandlineArguments: "<<std::endl;
@@ -82,13 +83,13 @@ void DetectConeLane::tearDown()
 }
 
 
-void DetectConeLane::recieveCombinedMessage(std::map<int,ConePackage> currentFrame){
+void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame){
   m_tick = std::chrono::system_clock::now();
   Eigen::MatrixXd extractedCones(3,currentFrame.size());
-  std::map<int,ConePackage>::iterator it;
+  std::reverse_iterator<std::map<int,ConePackage>::iterator> it;
   int coneIndex = 0;
-  it = currentFrame.begin();
-  while(it != currentFrame.end()){
+  it = currentFrame.rbegin();
+  while(it != currentFrame.rend()){
     auto direction = std::get<0>(it->second);
     auto distance = std::get<1>(it->second);
     auto type = std::get<2>(it->second);
@@ -511,106 +512,108 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
   cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
 
-  if(longSide.rows() > 1)
   {
-    // findSafeLocalPath ends with sending surfaces
-    DetectConeLane::findSafeLocalPath(longSide, shortSide);
-    //std::cout<<"DEBUG7"<<std::endl;
-  }
-  else
-  {
-    if(longSide.rows() == 0)
-    { std::cout<<"No Cones"<<"\n";
-      //No cones
-      /*opendlv::logic::perception::GroundSurfaceProperty surface;
-      surface.surfaceId(m_surfaceId);
-      surface.property("1");
-      m_od4.send(surface, sampleTime , m_senderStamp);*/
-      //std::cout<<"DetectConeLane send surface property: "<<" property: "<<1<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
-      opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-      surfaceArea.surfaceId(0);
-      surfaceArea.x1(1.0f);
-      surfaceArea.y1(0.0f);
-      surfaceArea.x2(1.0f);
-      surfaceArea.y2(0.0f);
-      surfaceArea.x3(0.0f);
-      surfaceArea.y3(0.0f);
-      surfaceArea.x4(0.0f);
-      surfaceArea.y4(0.0f);
-      m_od4.send(surfaceArea, sampleTime , m_senderStamp);
-      //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
-      //std::cout<<"DetectConeLane send surface: "<<" x1: "<<1<<" y1: "<<0<<" x2: "<<1<<" y2: "<<0<<" x3: "<<0<<" y3: "<<0<<" x4: "<<0<<" y4 "<<0<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
-      int rndmId = rand();
-      while (m_surfaceId == rndmId){rndmId = rand();}
-      m_surfaceId = rndmId;
-    }
-    else if(longSide.rows() == 1 && shortSide.rows() == 0)
-    { std::cout<<"1 Cone"<<"\n";
-      // 1 cone
-      int direction;
-      if(leftIsLong)
-      {
-        direction = -1;
-      }
-      else
-      {
-        direction = 1;
-      }
-
-      /*opendlv::logic::perception::GroundSurfaceProperty surface;
-      surface.surfaceId(m_surfaceId);
-      surface.property("1");
-      m_od4.send(surface);*/
-      //std::cout<<"DetectConeLane send surface property: "<<" property: "<<1<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
-
-      opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-      surfaceArea.surfaceId(0);
-      surfaceArea.x1(0.0f);
-      surfaceArea.y1(0.0f);
-      surfaceArea.x2(0.0f);
-      surfaceArea.y2(0.0f);
-      surfaceArea.x3(longSide(0,0));
-      surfaceArea.y3(longSide(0,1)+1.5f*direction);
-      surfaceArea.x4(longSide(0,0));
-      surfaceArea.y4(longSide(0,1)+1.5f*direction);
-      m_od4.send(surfaceArea, sampleTime , m_senderStamp);
-      //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
-      /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)+1.5f*direction<<" x4: "<<longSide(0,0)<<" y4 "<<longSide(0,1)+1.5f*direction<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
-      std::cout<<" senderStamp "<<m_senderStamp<<std::endl;*/
-
-      int rndmId = rand();
-      while (m_surfaceId == rndmId){rndmId = rand();}
-      m_surfaceId = rndmId;
+    std::unique_lock<std::mutex> lockSend(m_sendMutex);
+    if(longSide.rows() > 1)
+    {
+      // findSafeLocalPath ends with sending surfaces
+      DetectConeLane::findSafeLocalPath(longSide, shortSide);
+      //std::cout<<"DEBUG7"<<std::endl;
     }
     else
-    { std::cout<<"1 on each side"<<"\n";
-      //1 on each side
-      /*opendlv::logic::perception::GroundSurfaceProperty surface;
-      surface.surfaceId(m_surfaceId);
-      surface.property("1");
-      m_od4.send(surface, sampleTime , m_senderStamp);*/
-      //std::cout<<"DetectConeLane send surface property: "<<" property: "<<1<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
+    {
+      if(longSide.rows() == 0)
+      { std::cout<<"No Cones"<<"\n";
+        //No cones
+        /*opendlv::logic::perception::GroundSurfaceProperty surface;
+        surface.surfaceId(m_surfaceId);
+        surface.property("1");
+        m_od4.send(surface, sampleTime , m_senderStamp);*/
+        //std::cout<<"DetectConeLane send surface property: "<<" property: "<<1<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
+        opendlv::logic::perception::GroundSurfaceArea surfaceArea;
+        surfaceArea.surfaceId(0);
+        surfaceArea.x1(1.0f);
+        surfaceArea.y1(0.0f);
+        surfaceArea.x2(1.0f);
+        surfaceArea.y2(0.0f);
+        surfaceArea.x3(0.0f);
+        surfaceArea.y3(0.0f);
+        surfaceArea.x4(0.0f);
+        surfaceArea.y4(0.0f);
+        m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+        //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
+        //std::cout<<"DetectConeLane send surface: "<<" x1: "<<1<<" y1: "<<0<<" x2: "<<1<<" y2: "<<0<<" x3: "<<0<<" y3: "<<0<<" x4: "<<0<<" y4 "<<0<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
+        int rndmId = rand();
+        while (m_surfaceId == rndmId){rndmId = rand();}
+        m_surfaceId = rndmId;
+      }
+      else if(longSide.rows() == 1 && shortSide.rows() == 0)
+      { std::cout<<"1 Cone"<<"\n";
+        // 1 cone
+        int direction;
+        if(leftIsLong)
+        {
+          direction = -1;
+        }
+        else
+        {
+          direction = 1;
+        }
 
-      opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-      surfaceArea.surfaceId(0);
-      surfaceArea.x1(0.0f);
-      surfaceArea.y1(0.0f);
-      surfaceArea.x2(0.0f);
-      surfaceArea.y2(0.0f);
-      surfaceArea.x3(longSide(0,0));
-      surfaceArea.y3(longSide(0,1));
-      surfaceArea.x4(shortSide(0,0));
-      surfaceArea.y4(shortSide(0,1));
-      m_od4.send(surfaceArea, sampleTime , m_senderStamp);
-      /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)<<" x4: "<<shortSide(0,0)<<" y4 "<<shortSide(0,1)<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
-      std::cout<<" senderStamp "<<m_senderStamp<<std::endl;*/
+        /*opendlv::logic::perception::GroundSurfaceProperty surface;
+        surface.surfaceId(m_surfaceId);
+        surface.property("1");
+        m_od4.send(surface);*/
+        //std::cout<<"DetectConeLane send surface property: "<<" property: "<<1<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
 
-      //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
-      int rndmId = rand();
-      while (m_surfaceId == rndmId){rndmId = rand();}
-      m_surfaceId = rndmId;
-    }
+        opendlv::logic::perception::GroundSurfaceArea surfaceArea;
+        surfaceArea.surfaceId(0);
+        surfaceArea.x1(0.0f);
+        surfaceArea.y1(0.0f);
+        surfaceArea.x2(0.0f);
+        surfaceArea.y2(0.0f);
+        surfaceArea.x3(longSide(0,0));
+        surfaceArea.y3(longSide(0,1)+1.5f*direction);
+        surfaceArea.x4(longSide(0,0));
+        surfaceArea.y4(longSide(0,1)+1.5f*direction);
+        m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+        //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
+        /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)+1.5f*direction<<" x4: "<<longSide(0,0)<<" y4 "<<longSide(0,1)+1.5f*direction<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
+        std::cout<<" senderStamp "<<m_senderStamp<<std::endl;*/
 
+        int rndmId = rand();
+        while (m_surfaceId == rndmId){rndmId = rand();}
+        m_surfaceId = rndmId;
+      }
+      else
+      { std::cout<<"1 on each side"<<"\n";
+        //1 on each side
+        /*opendlv::logic::perception::GroundSurfaceProperty surface;
+        surface.surfaceId(m_surfaceId);
+        surface.property("1");
+        m_od4.send(surface, sampleTime , m_senderStamp);*/
+        //std::cout<<"DetectConeLane send surface property: "<<" property: "<<1<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
+
+        opendlv::logic::perception::GroundSurfaceArea surfaceArea;
+        surfaceArea.surfaceId(0);
+        surfaceArea.x1(0.0f);
+        surfaceArea.y1(0.0f);
+        surfaceArea.x2(0.0f);
+        surfaceArea.y2(0.0f);
+        surfaceArea.x3(longSide(0,0));
+        surfaceArea.y3(longSide(0,1));
+        surfaceArea.x4(shortSide(0,0));
+        surfaceArea.y4(shortSide(0,1));
+        m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+        /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)<<" x4: "<<shortSide(0,0)<<" y4 "<<shortSide(0,1)<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
+        std::cout<<" senderStamp "<<m_senderStamp<<std::endl;*/
+
+        //std::cout<<"Sending with ID: "<<m_surfaceId<<"\n";
+        int rndmId = rand();
+        while (m_surfaceId == rndmId){rndmId = rand();}
+        m_surfaceId = rndmId;
+      }
+    } //end send mutex
   } // End of else
 } // End of generateSurfaces
 
