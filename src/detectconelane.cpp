@@ -99,7 +99,7 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
     coneIndex++;
     it++;
   }
-  std::cout << extractedCones << std::endl;
+  //std::cout << extractedCones << std::endl;
 
   int nLeft = 0;
   int nRight = 0;
@@ -354,7 +354,7 @@ void DetectConeLane::initializeCollection(){
     extractedCones(2,I) = static_cast<double>(tpe);
     I++;
   }
-  std::cout<<"extractedCones"<<extractedCones<<std::endl;
+  //std::cout<<"extractedCones"<<extractedCones<<std::endl;
   int nLeft = 0;
   int nRight = 0;
   int nSmall = 0;
@@ -443,8 +443,8 @@ void DetectConeLane::sortIntoSideArrays(Eigen::MatrixXd extractedCones, int nLef
   Eigen::MatrixXf coneRight_f = coneRight.cast <float> ();
   Eigen::ArrayXXf sideLeft = coneLeft_f.transpose().array();
   Eigen::ArrayXXf sideRight = coneRight_f.transpose().array();
-  std::cout<<"sideLeft: "<<sideLeft<<std::endl;
-  std::cout<<"sideRight: "<<sideRight<<std::endl;
+  //std::cout<<"sideLeft: "<<sideLeft<<std::endl;
+  //std::cout<<"sideRight: "<<sideRight<<std::endl;
 
   DetectConeLane::generateSurfaces(sideLeft, sideRight, location);
 } // End of sortIntoSideArrays
@@ -1142,15 +1142,15 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
     /*tp = std::chrono::system_clock::now();
     sampleTime = cluon::time::convert(tp);*/
     opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-    surfaceArea.surfaceId(nSurfaces-1-n);
-    surfaceArea.x1(virtualPointsLong(2*(nSurfaces-1-n),0));
-    surfaceArea.y1(virtualPointsLong(2*(nSurfaces-1-n),1));
-    surfaceArea.x2(virtualPointsShort(2*(nSurfaces-1-n),0));
-    surfaceArea.y2(virtualPointsShort(2*(nSurfaces-1-n),1));
-    surfaceArea.x3(virtualPointsLong(2*(nSurfaces-1-n)+1,0));
-    surfaceArea.y3(virtualPointsLong(2*(nSurfaces-1-n)+1,1));
-    surfaceArea.x4(virtualPointsShort(2*(nSurfaces-1-n)+1,0));
-    surfaceArea.y4(virtualPointsShort(2*(nSurfaces-1-n)+1,1));
+    surfaceArea.surfaceId(nSurfaces-n-1);
+    surfaceArea.x1(virtualPointsLong(2*(n),0));
+    surfaceArea.y1(virtualPointsLong(2*(n),1));
+    surfaceArea.x2(virtualPointsShort(2*(n),0));
+    surfaceArea.y2(virtualPointsShort(2*(n),1));
+    surfaceArea.x3(virtualPointsLong(2*(n)+1,0));
+    surfaceArea.y3(virtualPointsLong(2*(n)+1,1));
+    surfaceArea.x4(virtualPointsShort(2*(n)+1,0));
+    surfaceArea.y4(virtualPointsShort(2*(n)+1,1));
     m_od4.send(surfaceArea, sampleTime , m_senderStamp);
     /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<virtualPointsLong(2*n,0)<<" y1: "<<virtualPointsLong(2*n,1)<<" x2: "<<virtualPointsShort(2*n,0)<<" y2: "<<virtualPointsShort(2*n,1)<<" x3: "<<virtualPointsLong(2*n+1,0)<<" y3: "<<virtualPointsLong(2*n+1,1);
     std::cout<<" x4: "<<virtualPointsShort(2*n+1,0)<<" y4 "<<virtualPointsShort(2*n+1,1)<<" frame ID: "<<m_surfaceId<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;

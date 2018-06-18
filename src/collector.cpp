@@ -162,22 +162,23 @@ auto start = std::chrono::system_clock::now();
 
 void Collector::GetCompleteFrame(){
     std::map<int,int>::iterator it2 = m_envelopeCount.begin();
-    std::map<int,ConePackage>::iterator it = m_currentFrame.begin();
-    std::cout<<"m_envelopeCount.size() = "<<m_envelopeCount.size()<<std::endl;
-    std::cout<<"m_currentFrame.size() = "<<m_currentFrame.size()<<std::endl;
     std::map<int,ConePackage> currentFrameCopy = m_currentFrame;
+    //std::map<int,ConePackage>::iterator it = m_currentFrame.begin();
+    //std::cout<<"m_envelopeCount.size() = "<<m_envelopeCount.size()<<std::endl;
+    //std::cout<<"m_currentFrame.size() = "<<m_currentFrame.size()<<std::endl;
     while(it2 != m_envelopeCount.end()){
-      auto direction = std::get<0>(it->second);
+      /*auto direction = std::get<0>(it->second);
       auto distance = std::get<1>(it->second);
       auto type = std::get<2>(it->second);
       auto first = it->first;
       std::cout<<"ID: "<<first<<" dir: "<<direction.azimuthAngle()<<" dis: "<<distance.distance()<<" type: "<<type.type()<<std::endl;
+      */
         if(it2->second != static_cast<int>(m_packetSize)){
             currentFrameCopy.erase(it2->first);
             std::cout << "Incomplete frame with id " << it2->first << " removed" << std::endl;
         }
         it2++;
-        it++;
+        //it++;
     }
     if (m_currentFrame.size() != currentFrameCopy.size()) {
       m_currentFrame = currentFrameCopy;
