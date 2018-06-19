@@ -72,6 +72,8 @@ class DetectConeLane {
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   bool m_newClock;
   std::mutex m_sendMutex;
+  std::mutex m_surfaceMutex = {};
+  std::mutex m_coneMutex = {};
   const double DEG2RAD = 0.017453292522222; // PI/180.0
 
 };

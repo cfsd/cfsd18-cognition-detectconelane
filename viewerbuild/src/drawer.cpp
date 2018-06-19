@@ -14,7 +14,7 @@ void Drawer::drawCones(){
     if(nPoints == 0){
         return; 
     }
-
+    glPointSize(10);
     glBegin(GL_POINTS);
     for(uint32_t i = 0; i<nPoints; i++){
         Eigen::MatrixXd localCone;
@@ -23,16 +23,13 @@ void Drawer::drawCones(){
         float y = static_cast<float>(localCone(1,0)/5);
         float z = 0.0f;
         if(static_cast<int>(m_cones(2,i)) == 1){
-            glColor3f(1.0,1.0,0.0);//yellow
-            glPointSize(10);
+            glColor3f(1.0,0.75f,0.0);//yellow
         }
         else if(static_cast<int>(m_cones(2,i)) == 2){
             glColor3f(0.0,0.0,1.0);//blue
-            glPointSize(10);    
         }
         else if(static_cast<int>(m_cones(2,i)) == 3){
             glColor3f(1.0,0.5,0.0);//little orange
-            glPointSize(10);
         }
         else if(static_cast<int>(m_cones(2,i)) == 4){
             glColor3f(1.0,0.5,0.0);//big orange
@@ -72,22 +69,24 @@ void Drawer::drawFinalCones(opendlv::logic::perception::GroundSurfaceArea surfac
     double y2 = surface.y2()/5;
     double y3 = surface.y3()/5;
     double y4 = surface.y4()/5;
+    glPointSize(5);
     glBegin(GL_POINTS);
     if(y1>y2){
-        glColor3f(1.0,1.0,0.0);//yellow
-        glPointSize(10);
+        glColor4f(1.0,0.75f,0.0,1.0);//yellow
         glVertex3f(static_cast<float>(x1),static_cast<float>(y1),0.0f);
         glVertex3f(static_cast<float>(x3),static_cast<float>(y3),0.0f);
-        glColor3f(0.0,0.0,1.0);//blue
+        glColor4f(0.0,0.0,1.0,1.0);//blue
+        glPointSize(5);
         glVertex3f(static_cast<float>(x2),static_cast<float>(y2),0.0f);
         glVertex3f(static_cast<float>(x4),static_cast<float>(y4),0.0f);
     }
     else{
-        glColor3f(0.0,0.0,1.0);
-        glPointSize(10);
+        glColor4f(0.0,0.0,1.0,1.0);
+        glPointSize(5);
         glVertex3f(static_cast<float>(x1),static_cast<float>(y1),0.0f);
         glVertex3f(static_cast<float>(x3),static_cast<float>(y3),0.0f);
-        glColor3f(1.0,1.0,0.0);//yellow
+        glColor4f(1.0,0.75f,0.0,1.0);//yellow
+        glPointSize(5);
         glVertex3f(static_cast<float>(x2),static_cast<float>(y2),0.0f);
         glVertex3f(static_cast<float>(x4),static_cast<float>(y4),0.0f);
 
@@ -104,7 +103,7 @@ void Drawer::drawPath(opendlv::logic::perception::GroundSurfaceArea surface){
     double y2 = surface.y2()/5;
     double y3 = surface.y3()/5;
     double y4 = surface.y4()/5;
-    glLineWidth(3);
+    glLineWidth(2);
     glColor4f(0.5f,0.5f,0.5f,1.0f);
     glBegin(GL_LINES);
     x1 = (x1+x2)/2;

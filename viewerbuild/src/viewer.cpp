@@ -29,7 +29,7 @@ void Viewer::Run(){
 
     pangolin::OpenGlRenderState s_cam(
                 pangolin::ProjectionMatrix(1024,768,2000,2000,512,389,0.1,1000),
-                pangolin::ModelViewLookAt(0,-10,10, 0,0,0,0.0,1.0, 0.0)
+                pangolin::ModelViewLookAt(0,-10,10, 0,0,0,1.0,0.0, 0.0)
                 );
     
     pangolin::View& d_cam = pangolin::CreateDisplay()

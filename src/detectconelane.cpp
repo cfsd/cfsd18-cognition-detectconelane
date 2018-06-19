@@ -58,6 +58,7 @@ void DetectConeLane::tearDown()
 void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame){
   m_tick = std::chrono::system_clock::now();
   Eigen::MatrixXd extractedCones(3,currentFrame.size());
+  std::lock_guard<std::mutex> lock(m_surfaceMutex);
   m_surfaces.clear();
   std::reverse_iterator<std::map<int,ConePackage>::iterator> it;
   int coneIndex = 0;
@@ -823,6 +824,7 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
 } // End of sendMatchedContainer
 
 std::vector<opendlv::logic::perception::GroundSurfaceArea> DetectConeLane::drawSurfaces(){
+  std::lock_guard<std::mutex> lock(m_surfaceMutex);
   return m_surfaces;
 }
 
