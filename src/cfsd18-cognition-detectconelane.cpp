@@ -48,6 +48,7 @@ int32_t main(int32_t argc, char **argv) {
     int separationTimeMs = (commandlineArguments.count("separationTimeMs")>0)?(std::stoi(commandlineArguments["separationTimeMs"])):(5);
     Collector collector(detectconelane,gatheringTimeMs,separationTimeMs,3);
     uint32_t detectconeStamp = (commandlineArguments.count("detectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["detectConeId"]))):(231); //231: Simulation is default
+    uint32_t id = (commandlineArguments.count("id")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["id"]))):(211);
 
     auto coneEnvelope{[senderStamp = detectconeStamp,&collector](cluon::data::Envelope &&envelope)
       {
@@ -63,8 +64,12 @@ int32_t main(int32_t argc, char **argv) {
     // Just sleep as this microservice is data driven.
     using namespace std::literals::chrono_literals;
     while (od4.isRunning()) {
-      std::this_thread::sleep_for(1s);
-      std::chrono::system_clock::time_point tp;
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+      cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+      opendlv::system::SignalStatusMessage readySignal;
+      readySignal.code(1);
+      od4.send(readySignal, sampleTime, id);
     }
   }
   return retCode;
