@@ -57,7 +57,9 @@ void DetectConeLane::tearDown()
 
 void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame){
   m_tick = std::chrono::system_clock::now();
-  Eigen::MatrixXd extractedCones(3,currentFrame.size());
+  int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0;
+
+  Eigen::ArrayXXf extractedCones(currentFrame.size(),3);
   std::reverse_iterator<std::map<int,ConePackage>::iterator> it;
   int coneIndex = 0;
   it = currentFrame.rbegin();
@@ -65,79 +67,62 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
     auto direction = std::get<0>(it->second);
     auto distance = std::get<1>(it->second);
     auto type = std::get<2>(it->second);
-    extractedCones(0,coneIndex) = direction.azimuthAngle();
-    extractedCones(1,coneIndex) = distance.distance();
-    extractedCones(2,coneIndex) = type.type();
-    coneIndex++;
-    it++;
-  }
+    extractedCones(coneIndex,0) = direction.azimuthAngle();
+    extractedCones(coneIndex,1) = distance.distance();
+    extractedCones(coneIndex,2) = type.type();
 
-  int nLeft = 0;
-  int nRight = 0;
-  int nSmall = 0;
-  int nBig = 0;
-
-  for (int i = 0; i < extractedCones.cols(); i++) {
-    int type = static_cast<int>(extractedCones(2,i));
-    if(type == 1){ nLeft++; }
-    else if(type == 2){ nRight++; }
-    else if(type == 3){ nSmall++; }
-    else if(type == 4){ nBig++; }
+    int theType = static_cast<int>(type.type());
+    if(theType == 1){ nLeft++; }
+    else if(theType == 2){ nRight++; }
+    else if(theType == 3){ nSmall++; }
+    else if(theType == 4){ nBig++; }
     else
     {
-      std::cout << "WARNING! Object " << i << " has invalid cone type: " << type << std::endl;
+      std::cout << "WARNING! Object " << coneIndex << " has invalid cone type: " << theType << std::endl;
     } // End of else
-  } // End of for
 
-  if(extractedCones.cols() > 0){
+    coneIndex++;
+    it++;
+  } // End of while
+
+  if(extractedCones.rows() > 0){
     DetectConeLane::sortIntoSideArrays(extractedCones, nLeft, nRight, nSmall, nBig);
   }
 }
 
-void DetectConeLane::sortIntoSideArrays(Eigen::MatrixXd extractedCones, int nLeft, int nRight, int nSmall, int nBig)
+void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLeft, int nRight, int nSmall, int nBig)
 {
-  int coneNum = extractedCones.cols();
-  //Convert to cartesian
-  Eigen::MatrixXd cone;
-  Eigen::MatrixXd coneLocal = Eigen::MatrixXd::Zero(2,coneNum);
-
-  for(int p = 0; p < coneNum; p++)
-  {
-    cone = DetectConeLane::Spherical2Cartesian(extractedCones(0,p), 0.0, extractedCones(1,p));
-    coneLocal.col(p) = cone;
-  } // End of for
-//std::cout << "ConeLocal: " << coneLocal.transpose() << std::endl;
-
-  Eigen::MatrixXd coneLeft = Eigen::MatrixXd::Zero(2,nLeft);
-  Eigen::MatrixXd coneRight = Eigen::MatrixXd::Zero(2,nRight);
-  Eigen::MatrixXd coneSmall = Eigen::MatrixXd::Zero(2,nSmall);
-  Eigen::MatrixXd coneBig = Eigen::MatrixXd::Zero(2,nBig);
-  int a = 0;
-  int b = 0;
-  int c = 0;
-  int d = 0;
+  int coneNum = extractedCones.rows();
+  Eigen::ArrayXXf cone;
+  Eigen::ArrayXXf coneLeft(nLeft,2);
+  Eigen::ArrayXXf coneRight(nRight,2);
+  Eigen::ArrayXXf coneSmall(nSmall,2);
+  Eigen::ArrayXXf coneBig(nBig,2);
+  int a = 0, b = 0, c = 0, d = 0;
   int type;
 
+  // Convert to cartesian and sort by type
   for(int k = 0; k < coneNum; k++){
-    type = static_cast<int>(extractedCones(2,k));
+    cone = DetectConeLane::Spherical2Cartesian(extractedCones(k,0), 0.0f, extractedCones(k,1));
+    type = static_cast<int>(extractedCones(k,2));
     if(type == 1)
     {
-      coneLeft.col(a) = coneLocal.col(k);
+      coneLeft.row(a) = cone;
       a++;
     }
     else if(type == 2)
     {
-      coneRight.col(b) = coneLocal.col(k);
+      coneRight.row(b) = cone;
       b++;
     }
     else if(type == 3)
     {
-      coneSmall.col(c) = coneLocal.col(k);
+      coneSmall.row(c) = cone;
       c++;
     }
     else if(type == 4)
     {
-      coneBig.col(d) = coneLocal.col(k);
+      coneBig.row(d) = cone;
       d++;
     } // End of else
   } // End of for
@@ -146,14 +131,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::MatrixXd extractedCones, int nLef
   Eigen::ArrayXXf location(1,2);
   location << -3,0;
 
-  Eigen::MatrixXf coneLeft_f = coneLeft.cast <float> ();
-  Eigen::MatrixXf coneRight_f = coneRight.cast <float> ();
-  Eigen::ArrayXXf sideLeft = coneLeft_f.transpose().array();
-  Eigen::ArrayXXf sideRight = coneRight_f.transpose().array();
-  //std::cout<<"sideLeft: "<<sideLeft<<std::endl;
-  //std::cout<<"sideRight: "<<sideRight<<std::endl;
-
-  DetectConeLane::generateSurfaces(sideLeft, sideRight, location);
+  DetectConeLane::generateSurfaces(coneLeft, coneRight, location);
 } // End of sortIntoSideArrays
 
 
@@ -294,14 +272,12 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
 } // End of generateSurfaces
 
 
-// copy from perception-detectcone
-Eigen::MatrixXd DetectConeLane::Spherical2Cartesian(double azimuth, double zenimuth, double distance)
+Eigen::ArrayXXf DetectConeLane::Spherical2Cartesian(float azimuth, float zenimuth, float distance)
 {
-  double xData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*sin(azimuth * static_cast<double>(DEG2RAD));
-  double yData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*cos(azimuth * static_cast<double>(DEG2RAD));
-  Eigen::MatrixXd recievedPoint = Eigen::MatrixXd::Zero(2,1);
-  recievedPoint << xData,
-                   yData;
+  float xData = distance * cosf(zenimuth * static_cast<float>(DEG2RAD))*sinf(azimuth * static_cast<float>(DEG2RAD));
+  float yData = distance * cosf(zenimuth * static_cast<float>(DEG2RAD))*cosf(azimuth * static_cast<float>(DEG2RAD));
+  Eigen::ArrayXXf recievedPoint(1,2);
+  recievedPoint << xData, yData;
   return recievedPoint;
 } // End of Spherical2Cartesian
 
