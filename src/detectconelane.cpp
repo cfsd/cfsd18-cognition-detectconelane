@@ -586,7 +586,7 @@ Eigen::ArrayXXf DetectConeLane::orderAndFilterCones(Eigen::ArrayXXf cones, Eigen
             line1 = ((cones.row(found(i-2))-cones.row(found(i-1))).matrix()).norm();
             line2 = ((cones.row(found(i-1))-cones.row(j)).matrix()).norm();
             line3 = ((cones.row(j)-cones.row(found(i-2))).matrix()).norm();
-            angle = std::acos((float)(-std::pow(line3,2)+std::pow(line2,2)+std::pow(line1,2))/(2*line2*line1));
+            angle = std::acos((-line3*line3+line2*line2+line1*line1)/(2*line2*line1));
 
             if(std::abs(angle) > m_maxConeAngle)
             {
