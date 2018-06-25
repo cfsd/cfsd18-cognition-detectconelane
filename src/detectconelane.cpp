@@ -164,8 +164,8 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     orderedConesLeft = DetectConeLane::orderAndFilterCones(sideLeft,location);
     orderedConesRight = DetectConeLane::orderAndFilterCones(sideRight,location);
   }else{
-    orderedConesLeft = sideLeft;//DetectConeLane::orderCones(sideLeft,location);
-    orderedConesRight = sideRight;//DetectConeLane::orderCones(sideRight,location);
+    orderedConesLeft = DetectConeLane::orderCones(sideLeft,location);
+    orderedConesRight = DetectConeLane::orderCones(sideRight,location);
   }
 
   float pathLengthLeft = DetectConeLane::findTotalPathLength(orderedConesLeft);
