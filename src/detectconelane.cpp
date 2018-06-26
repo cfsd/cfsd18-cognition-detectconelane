@@ -36,10 +36,10 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_newClock{true}
 , m_sendMutex()
 {
-  std::cout<<"DetectConeLane set up with "<<commandlineArguments.size()<<" commandlineArguments: "<<std::endl;
+  /*std::cout<<"DetectConeLane set up with "<<commandlineArguments.size()<<" commandlineArguments: "<<std::endl;
   for (std::map<std::string, std::string >::iterator it = commandlineArguments.begin();it !=commandlineArguments.end();it++){
     std::cout<<it->first<<" "<<it->second<<std::endl;
-  }
+  }*/
 }
 
 DetectConeLane::~DetectConeLane()
@@ -85,7 +85,7 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
     else if(type == 4){ nBig++; }
     else
     {
-      std::cout << "WARNING! Object " << i << " has invalid cone type: " << type << std::endl;
+      //std::cout << "WARNING! Object " << i << " has invalid cone type: " << type << std::endl;
     } // End of else
   } // End of for
 
@@ -229,7 +229,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     else
     {
       if(longSide.rows() == 0)
-      { std::cout<<"No Cones"<<"\n";
+      { //std::cout<<"No Cones"<<"\n";
         //No cones
         opendlv::logic::perception::GroundSurfaceArea surfaceArea;
         surfaceArea.surfaceId(0);
@@ -242,10 +242,10 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
         surfaceArea.x4(0.0f);
         surfaceArea.y4(0.0f);
         m_od4.send(surfaceArea, sampleTime , m_senderStamp);
-        //std::cout<<"DetectConeLane send surface: "<<" x1: "<<1<<" y1: "<<0<<" x2: "<<1<<" y2: "<<0<<" x3: "<<0<<" y3: "<<0<<" x4: "<<0<<" y4 "<<0<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
+        ////std::cout<<"DetectConeLane send surface: "<<" x1: "<<1<<" y1: "<<0<<" x2: "<<1<<" y2: "<<0<<" x3: "<<0<<" y3: "<<0<<" x4: "<<0<<" y4 "<<0<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
       }
       else if(longSide.rows() == 1 && shortSide.rows() == 0)
-      { std::cout<<"1 Cone"<<"\n";
+      { //std::cout<<"1 Cone"<<"\n";
         // 1 cone
         int direction;
         if(leftIsLong)
@@ -272,7 +272,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
         */
       }
       else
-      { std::cout<<"1 on each side"<<"\n";
+      { //std::cout<<"1 on each side"<<"\n";
         //1 on each side
         opendlv::logic::perception::GroundSurfaceArea surfaceArea;
         surfaceArea.surfaceId(0);
@@ -625,7 +625,7 @@ Eigen::ArrayXXf DetectConeLane::orderAndFilterCones(Eigen::ArrayXXf cones, Eigen
     // If no remaining cone was accepted, the algorithm finishes early
     if(closestConeIndex == -1)
     {
-std::cout << "Remove invalid cones" << std::endl;
+//std::cout << "Remove invalid cones" << std::endl;
       break;
     } // End of if
 
@@ -744,7 +744,7 @@ Eigen::ArrayXXf DetectConeLane::guessCones(Eigen::ArrayXXf firstCone, Eigen::Arr
   else
   {
     // Should not be in use. Works in matlab but not here were array sizes have to be defined in advance? Throw exception if this is reached?
-    std::cout << "WARNING, ENTERED DANGEROUS AREA IN GUESSCONES " << std::endl;
+    //std::cout << "WARNING, ENTERED DANGEROUS AREA IN GUESSCONES " << std::endl;
     guessedCones << -1000,-1000;
   } // End of else
 
