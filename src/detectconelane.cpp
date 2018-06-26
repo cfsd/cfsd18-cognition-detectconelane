@@ -274,8 +274,8 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
 
 Eigen::ArrayXXf DetectConeLane::Spherical2Cartesian(float azimuth, float zenimuth, float distance)
 {
-  float xData = distance * cosf(zenimuth * static_cast<float>(DEG2RAD))*sinf(azimuth * static_cast<float>(DEG2RAD));
-  float yData = distance * cosf(zenimuth * static_cast<float>(DEG2RAD))*cosf(azimuth * static_cast<float>(DEG2RAD));
+  float xData = distance * cosf(zenimuth * static_cast<float>(DEG2RAD))*cosf(azimuth * static_cast<float>(DEG2RAD));
+  float yData = distance * cosf(zenimuth * static_cast<float>(DEG2RAD))*sinf(azimuth * static_cast<float>(DEG2RAD));
   Eigen::ArrayXXf recievedPoint(1,2);
   recievedPoint << xData, yData;
   return recievedPoint;
