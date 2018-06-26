@@ -297,8 +297,8 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
 // copy from perception-detectcone
 Eigen::MatrixXd DetectConeLane::Spherical2Cartesian(double azimuth, double zenimuth, double distance)
 {
-  double xData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*sin(azimuth * static_cast<double>(DEG2RAD));
-  double yData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*cos(azimuth * static_cast<double>(DEG2RAD));
+  double xData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*cos(azimuth * static_cast<double>(DEG2RAD));
+  double yData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*sin(azimuth * static_cast<double>(DEG2RAD));
   Eigen::MatrixXd recievedPoint = Eigen::MatrixXd::Zero(2,1);
   recievedPoint << xData,
                    yData;
@@ -687,9 +687,9 @@ Eigen::ArrayXXf DetectConeLane::insertNeededGuessedCones(Eigen::ArrayXXf longSid
       }
       else
       {
-        guess = DetectConeLane::guessCones(longSide.row(i-1),longSide.row(i),guessDistance,guessToTheLeft,false,true);
-        nGuessedCones = nGuessedCones+1;
-        guessedCones.row(nGuessedCones-1) = guess;
+        //guess = DetectConeLane::guessCones(longSide.row(i-1),longSide.row(i),guessDistance,guessToTheLeft,false,true);
+        //nGuessedCones = nGuessedCones+1;
+        //guessedCones.row(nGuessedCones-1) = guess;
         guess = DetectConeLane::guessCones(longSide.row(i),longSide.row(i+1),guessDistance,guessToTheLeft,true,false);
         nGuessedCones = nGuessedCones+1;
       } // End of else
