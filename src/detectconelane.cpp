@@ -166,8 +166,8 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     orderedConesLeft = DetectConeLane::orderAndFilterCones(sideLeft,location);
     orderedConesRight = DetectConeLane::orderAndFilterCones(sideRight,location);
   }else{
-    orderedConesLeft = sideLeft;//DetectConeLane::orderCones(sideLeft,location);
-    orderedConesRight = sideRight;//DetectConeLane::orderCones(sideRight,location);
+    orderedConesLeft = DetectConeLane::orderCones(sideLeft,location);
+    orderedConesRight = DetectConeLane::orderCones(sideRight,location);
   }
 
   float pathLengthLeft = DetectConeLane::findTotalPathLength(orderedConesLeft);
@@ -301,8 +301,8 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
 // copy from perception-detectcone
 Eigen::MatrixXd DetectConeLane::Spherical2Cartesian(double azimuth, double zenimuth, double distance)
 {
-  double xData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*sin(azimuth * static_cast<double>(DEG2RAD));
-  double yData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*cos(azimuth * static_cast<double>(DEG2RAD));
+  double xData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*cos(azimuth * static_cast<double>(DEG2RAD));
+  double yData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*sin(azimuth * static_cast<double>(DEG2RAD));
   Eigen::MatrixXd recievedPoint = Eigen::MatrixXd::Zero(2,1);
   recievedPoint << xData,
                    yData;

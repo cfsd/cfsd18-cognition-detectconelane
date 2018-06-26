@@ -22,10 +22,10 @@ void Drawer::drawCones(){
         float x = static_cast<float>(localCone(0,0)/5);
         float y = static_cast<float>(localCone(1,0)/5);
         float z = 0.0f;
-        if(static_cast<int>(m_cones(2,i)) == 1){
+        if(static_cast<int>(m_cones(2,i)) == 2){
             glColor3f(1.0,0.75f,0.0);//yellow
         }
-        else if(static_cast<int>(m_cones(2,i)) == 2){
+        else if(static_cast<int>(m_cones(2,i)) == 1){
             glColor3f(0.0,0.0,1.0);//blue
         }
         else if(static_cast<int>(m_cones(2,i)) == 3){
@@ -103,6 +103,11 @@ void Drawer::drawPath(opendlv::logic::perception::GroundSurfaceArea surface){
     double y2 = surface.y2()/5;
     double y3 = surface.y3()/5;
     double y4 = surface.y4()/5;
+    glPointSize(15);
+    glBegin(GL_POINTS);
+    glColor3f(1.0,0.0,0.0);
+    glVertex3f(0.0,0.0,0.0);
+    glEnd();
     glLineWidth(2);
     glColor4f(0.5f,0.5f,0.5f,1.0f);
     glBegin(GL_LINES);
@@ -117,8 +122,8 @@ void Drawer::drawPath(opendlv::logic::perception::GroundSurfaceArea surface){
 
 Eigen::MatrixXd Drawer::Spherical2Cartesian(double azimuth, double zenimuth, double distance)
 {
-  double xData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*sin(azimuth * static_cast<double>(DEG2RAD));
-  double yData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*cos(azimuth * static_cast<double>(DEG2RAD));
+  double xData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*cos(azimuth * static_cast<double>(DEG2RAD));
+  double yData = distance * cos(zenimuth * static_cast<double>(DEG2RAD))*sin(azimuth * static_cast<double>(DEG2RAD));
   Eigen::MatrixXd recievedPoint = Eigen::MatrixXd::Zero(2,1);
   recievedPoint << xData,
                    yData;
