@@ -26,11 +26,13 @@
 DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_od4(od4)
 , m_senderStamp{(commandlineArguments["id"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["id"]))) : (211)}
-, m_fakeSlamActivated{(commandlineArguments["fakeSlamActivated"].size() != 0) ? (std::stoi(commandlineArguments["fakeSlamActivated"])==1) : (false)}
+, m_slamActivated{(commandlineArguments["slamActivated"].size() != 0) ? (std::stoi(commandlineArguments["slamActivated"])==1) : (false)}
 , m_guessDistance{(commandlineArguments["guessDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["guessDistance"]))) : (3.0f)}
 , m_maxConeAngle{(commandlineArguments["maxConeAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeAngle"]))) : (1.570796325f)}
-, m_coneWidthSeparationThreshold{(commandlineArguments["coneWidthSeparationThreshold"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["coneWidthSeparationThreshold"]))) : (3.5f)}
-, m_coneLengthSeparationThreshold{(commandlineArguments["coneLengthSeparationThreshold"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["coneLengthSeparationThreshold"]))) : (5.5f)}
+, m_maxConeWidthSeparation{(commandlineArguments["maxConeWidthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeWidthSeparation"]))) : (3.0f)}
+, m_widthSeparationMargin{(commandlineArguments["widthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["widthSeparationMargin"]))) : (1.0f)}
+, m_maxConeLengthSeparation{(commandlineArguments["maxConeLengthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeLengthSeparation"]))) : (5.0f)}
+, m_lengthSeparationMargin{(commandlineArguments["lengthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["lengthSeparationMargin"]))) : (1.0f)}
 , m_tick{}
 , m_tock{}
 , m_newClock{true}
@@ -129,7 +131,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
 
 
   Eigen::ArrayXXf location(1,2);
-  location << -3,0;
+  location << 0,0;
 
   DetectConeLane::generateSurfaces(coneLeft, coneRight, location);
 } // End of sortIntoSideArrays
@@ -138,7 +140,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
 void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf sideRight, Eigen::ArrayXXf location){
   Eigen::ArrayXXf orderedConesLeft;
   Eigen::ArrayXXf orderedConesRight;
-  if (!m_fakeSlamActivated) {
+  if (!m_slamActivated) {
     orderedConesLeft = DetectConeLane::orderAndFilterCones(sideLeft,location);
     orderedConesRight = DetectConeLane::orderAndFilterCones(sideRight,location);
   }else{
@@ -163,8 +165,8 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   {
     Eigen::ArrayXXf tmpLongSide = orderedConesLeft;
     Eigen::ArrayXXf tmpShortSide;
-    if (!m_fakeSlamActivated || orderedConesRight.rows()==0) {
-      tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesLeft, orderedConesRight, location, m_coneWidthSeparationThreshold,  m_guessDistance, false);
+    if (!m_slamActivated || orderedConesRight.rows()==0) {
+      tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesLeft, orderedConesRight, location, m_maxConeWidthSeparation+m_widthSeparationMargin, m_guessDistance, false);
     }
     else{
       tmpShortSide=orderedConesRight;
@@ -179,8 +181,8 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   {
     Eigen::ArrayXXf tmpLongSide = orderedConesRight;
     Eigen::ArrayXXf tmpShortSide;
-    if (!m_fakeSlamActivated|| orderedConesLeft.rows()==0) {
-      tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesRight, orderedConesLeft, location, m_coneWidthSeparationThreshold,  m_guessDistance, true);
+    if (!m_slamActivated|| orderedConesLeft.rows()==0) {
+      tmpShortSide = DetectConeLane::insertNeededGuessedCones(orderedConesRight, orderedConesLeft, location, m_maxConeWidthSeparation+m_widthSeparationMargin, m_guessDistance, true);
     }
     else{
       tmpShortSide = orderedConesLeft;
@@ -570,7 +572,7 @@ Eigen::ArrayXXf DetectConeLane::orderAndFilterCones(Eigen::ArrayXXf cones, Eigen
       if(!((found==j).any()))
       {
         tmpDist = ((current-cones.row(j)).matrix()).norm();
-        if(tmpDist < shortestDist && ((tmpDist < m_coneLengthSeparationThreshold && i>0) || (tmpDist < m_coneLengthSeparationThreshold+3.5f && i<1)) )
+        if(tmpDist < shortestDist && ( (i>0 && tmpDist < m_maxConeLengthSeparation+m_lengthSeparationMargin) || (i<1 && tmpDist < sqrtf( powf(m_maxConeLengthSeparation+m_lengthSeparationMargin+1.7f,2)+powf(m_maxConeWidthSeparation+m_widthSeparationMargin,2) )) ))
         {
           // If it's one of the first two cones, the nearest neighbour is accepted
           if(i < 2)

@@ -59,11 +59,13 @@ class DetectConeLane {
 
   cluon::OD4Session &m_od4;
   int m_senderStamp;
-  bool m_fakeSlamActivated;
+  bool m_slamActivated;
   float m_guessDistance;
   float m_maxConeAngle;
-  float m_coneWidthSeparationThreshold;
-  float m_coneLengthSeparationThreshold;
+  float m_maxConeWidthSeparation;
+  float m_widthSeparationMargin;
+  float m_maxConeLengthSeparation;
+  float m_lengthSeparationMargin;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   bool m_newClock;
