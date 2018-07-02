@@ -228,13 +228,22 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
       { //std::cout<<"1 Cone"<<"\n";
         // 1 cone
         int direction;
-        if(leftIsLong)
-        {
+        bool angledAim = false;
+        if(leftIsLong){
           direction = -1;
-        }
-        else
-        {
+          angledAim = longSide(0,1) < 0;
+        }else{
           direction = 1;
+          angledAim = longSide(0,1) > 0;
+        }
+
+        // If the cone is one the wrong side, aim 90 degrees to the side of it. Otherwise aim towards same x but different y.
+        Eigen::ArrayXXf aimpoint(1,2);
+        if(angledAim){
+          // Finding a point 90 degrees to the side is the same operation as in guessCones.
+          aimpoint = DetectConeLane::guessCones(location, longSide.row(0), 1.5f, !leftIsLong, false, true);
+        }else{
+          aimpoint << longSide(0,0),longSide(0,1)+1.5f*direction;
         }
 
         opendlv::logic::perception::GroundSurfaceArea surfaceArea;
@@ -243,10 +252,10 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
         surfaceArea.y1(0.0f);
         surfaceArea.x2(0.0f);
         surfaceArea.y2(0.0f);
-        surfaceArea.x3(longSide(0,0));
-        surfaceArea.y3(longSide(0,1)+1.5f*direction);
-        surfaceArea.x4(longSide(0,0));
-        surfaceArea.y4(longSide(0,1)+1.5f*direction);
+        surfaceArea.x3(aimpoint(0,0));
+        surfaceArea.y3(aimpoint(0,1));
+        surfaceArea.x4(aimpoint(0,0));
+        surfaceArea.y4(aimpoint(0,1));
         m_od4.send(surfaceArea, sampleTime , m_senderStamp);
         /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)+1.5f*direction<<" x4: "<<longSide(0,0)<<" y4 "<<longSide(0,1)+1.5f*direction<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
         */
