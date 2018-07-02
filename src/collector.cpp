@@ -21,6 +21,7 @@
 
 Collector::Collector(DetectConeLane &detectconelane,int timeOutMs, int separationTimeMs, int packetSize) :
     m_module(detectconelane),
+    m_sender(),
     m_packetSize(packetSize),
     m_timeOutMs(timeOutMs),
     m_separationTimeMs(separationTimeMs),
@@ -31,6 +32,7 @@ Collector::Collector(DetectConeLane &detectconelane,int timeOutMs, int separatio
 }
 
 void Collector::CollectCones(cluon::data::Envelope data){
+    m_sender = data.senderStamp();
     cluon::data::TimeStamp ts = data.sampleTimeStamp();
     int64_t delta = cluon::time::deltaInMicroseconds(ts,m_currentFrameTime);
     m_timeReceived = std::chrono::system_clock::now();
@@ -178,7 +180,7 @@ void Collector::GetCompleteFrame(){
 
 void Collector::SendFrame(){
     //std::cout << "sending " << m_currentFrame.size() << " cones" << std::endl;
-    m_module.receiveCombinedMessage(m_currentFrame);
+    m_module.receiveCombinedMessage(m_currentFrame,m_sender);
 
     m_tock = std::chrono::system_clock::now();
     std::chrono::duration<double> dur = m_tock-m_tick;

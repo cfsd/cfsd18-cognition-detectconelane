@@ -49,6 +49,7 @@ class Collector{
     bool m_processing = false;
     uint32_t m_messageCount = 0;
     DetectConeLane &m_module;
+    uint32_t m_sender;
     uint32_t m_packetSize;
     int m_timeOutMs;
     int m_separationTimeMs;

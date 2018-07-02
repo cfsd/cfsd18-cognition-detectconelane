@@ -26,7 +26,9 @@
 DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_od4(od4)
 , m_senderStamp{(commandlineArguments["id"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["id"]))) : (211)}
-, m_slamActivated{(commandlineArguments["slamActivated"].size() != 0) ? (std::stoi(commandlineArguments["slamActivated"])==1) : (false)}
+, m_slamStamp{(commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120)}
+, m_alwaysSlam{(commandlineArguments["alwaysSlam"].size() != 0) ? (std::stoi(commandlineArguments["alwaysSlam"])==1) : (false)}
+, m_slamActivated{}
 , m_guessDistance{(commandlineArguments["guessDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["guessDistance"]))) : (3.0f)}
 , m_maxConeAngle{(commandlineArguments["maxConeAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeAngle"]))) : (1.570796325f)}
 , m_maxConeWidthSeparation{(commandlineArguments["maxConeWidthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeWidthSeparation"]))) : (3.0f)}
@@ -57,7 +59,8 @@ void DetectConeLane::tearDown()
 }
 
 
-void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame){
+void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame, uint32_t sender){
+  m_slamActivated = m_alwaysSlam || sender == m_slamStamp;
   m_tick = std::chrono::system_clock::now();
   int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0;
 

@@ -47,12 +47,15 @@ int32_t main(int32_t argc, char **argv) {
     int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(60);
     int separationTimeMs = (commandlineArguments.count("separationTimeMs")>0)?(std::stoi(commandlineArguments["separationTimeMs"])):(5);
     Collector collector(detectconelane,gatheringTimeMs,separationTimeMs,3);
-    uint32_t detectconeStamp = (commandlineArguments.count("detectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["detectConeId"]))):(231); //231: Simulation is default
+    uint32_t detectconeStamp = (commandlineArguments.count("detectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["detectConeId"]))):(118);
+    uint32_t slamStamp = (commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120);
+    uint32_t simDetectconeStamp = (commandlineArguments.count("simDetectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["simDetectConeId"]))):(231);
     uint32_t id = (commandlineArguments.count("id")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["id"]))):(211);
 
-    auto coneEnvelope{[senderStamp = detectconeStamp,&collector](cluon::data::Envelope &&envelope)
+    auto coneEnvelope{[detector = detectconeStamp, slam = slamStamp, simulation = simDetectconeStamp ,&collector](cluon::data::Envelope &&envelope)
       {
-        if(envelope.senderStamp() == senderStamp){
+        uint32_t sender = envelope.senderStamp();
+        if(sender == detector || sender == slam || sender == simulation){
           collector.CollectCones(envelope);
         }
       }

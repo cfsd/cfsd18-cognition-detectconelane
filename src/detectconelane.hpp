@@ -37,7 +37,7 @@ class DetectConeLane {
   DetectConeLane(DetectConeLane const &) = delete;
   DetectConeLane &operator=(DetectConeLane const &) = delete;
   virtual ~DetectConeLane();
-  void receiveCombinedMessage(std::map<int,ConePackage>);
+  void receiveCombinedMessage(std::map<int,ConePackage>, uint32_t);
 
  private:
   void setUp();
@@ -59,6 +59,8 @@ class DetectConeLane {
 
   cluon::OD4Session &m_od4;
   int m_senderStamp;
+  uint32_t m_slamStamp;
+  bool m_alwaysSlam;
   bool m_slamActivated;
   float m_guessDistance;
   float m_maxConeAngle;
