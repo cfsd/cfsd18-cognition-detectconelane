@@ -62,6 +62,9 @@ class DetectConeLane {
   uint32_t m_slamStamp;
   bool m_alwaysSlam;
   bool m_slamActivated;
+  int m_lapCounter;
+  std::chrono::time_point<std::chrono::system_clock> m_latestLapIncrease;
+  bool m_orangeVisibleInLatestFrame;
   float m_guessDistance;
   float m_maxConeAngle;
   float m_maxConeWidthSeparation;

@@ -28,7 +28,10 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_senderStamp{(commandlineArguments["id"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["id"]))) : (211)}
 , m_slamStamp{(commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120)}
 , m_alwaysSlam{(commandlineArguments["alwaysSlam"].size() != 0) ? (std::stoi(commandlineArguments["alwaysSlam"])==1) : (false)}
-, m_slamActivated{}
+, m_slamActivated{m_alwaysSlam}
+, m_lapCounter{0}
+, m_latestLapIncrease{std::chrono::system_clock::now()}
+, m_orangeVisibleInLatestFrame{false}
 , m_guessDistance{(commandlineArguments["guessDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["guessDistance"]))) : (3.0f)}
 , m_maxConeAngle{(commandlineArguments["maxConeAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeAngle"]))) : (1.570796325f)}
 , m_maxConeWidthSeparation{(commandlineArguments["maxConeWidthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeWidthSeparation"]))) : (3.0f)}
@@ -60,10 +63,16 @@ void DetectConeLane::tearDown()
 
 
 void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame, uint32_t sender){
-  m_slamActivated = m_alwaysSlam || sender == m_slamStamp;
-  m_tick = std::chrono::system_clock::now();
-  int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0;
 
+  m_tick = std::chrono::system_clock::now();
+
+  if(!m_slamActivated && sender == m_slamStamp){
+    m_slamActivated = true;
+    m_lapCounter++;
+    m_latestLapIncrease = std::chrono::system_clock::now();
+  }
+
+  int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0;
   Eigen::ArrayXXf extractedCones(currentFrame.size(),3);
   std::reverse_iterator<std::map<int,ConePackage>::iterator> it;
   int coneIndex = 0;
@@ -132,6 +141,15 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
     } // End of else
   } // End of for
 
+  bool orangeVisibleInThisFrame = nBig > 1;
+  if(m_slamActivated && !orangeVisibleInThisFrame && m_orangeVisibleInLatestFrame){
+    std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
+    if(timeSinceLatestLapIncrease.count() > 10000){
+      m_lapCounter++;
+      m_latestLapIncrease = std::chrono::system_clock::now();
+    }
+  }
+  m_orangeVisibleInLatestFrame = orangeVisibleInThisFrame;
 
   Eigen::ArrayXXf location(1,2);
   location << 0,0;
@@ -204,14 +222,14 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
 
   {
     std::unique_lock<std::mutex> lockSend(m_sendMutex);
-    if(longSide.rows() > 1)
+    if(longSide.rows() > 1 && m_lapCounter < 10)
     {
       // findSafeLocalPath ends with sending surfaces
       DetectConeLane::findSafeLocalPath(longSide, shortSide);
     }
     else
     {
-      if(longSide.rows() == 0)
+      if(longSide.rows() == 0 || m_lapCounter > 9)
       { //std::cout<<"No Cones"<<"\n";
         //No cones
         opendlv::logic::perception::GroundSurfaceArea surfaceArea;
