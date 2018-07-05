@@ -435,7 +435,7 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
     virtualPointsShortFinal.bottomRows(1) = virtualPointsShort.row(nShort-1);
   } // End of else
 
-  if(m_lapCounter > m_nLapsToGo){
+  if(m_lapCounter > m_nLapsToGo-1){
     int nLong = virtualPointsLongFinal.rows();
     int nShort = virtualPointsShortFinal.rows();
 
