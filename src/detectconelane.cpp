@@ -30,6 +30,8 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_alwaysSlam{(commandlineArguments["alwaysSlam"].size() != 0) ? (std::stoi(commandlineArguments["alwaysSlam"])==1) : (false)}
 , m_slamActivated{m_alwaysSlam}
 , m_lapCounter{0}
+, m_nLapsToGo{(commandlineArguments["nLapsToGo"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nLapsToGo"]))) : (10)}
+, m_lapCounterLockTime{(commandlineArguments["lapCounterLockTime"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["lapCounterLockTime"]))) : (10)}
 , m_latestLapIncrease{std::chrono::system_clock::now()}
 , m_orangeVisibleInLatestFrame{false}
 , m_guessDistance{(commandlineArguments["guessDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["guessDistance"]))) : (3.0f)}
@@ -144,7 +146,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
   bool orangeVisibleInThisFrame = nBig > 1;
   if(m_slamActivated && !orangeVisibleInThisFrame && m_orangeVisibleInLatestFrame){
     std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
-    if(timeSinceLatestLapIncrease.count() > 10000){
+    if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
       m_lapCounter++;
       m_latestLapIncrease = std::chrono::system_clock::now();
     }
@@ -433,7 +435,7 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
     virtualPointsShortFinal.bottomRows(1) = virtualPointsShort.row(nShort-1);
   } // End of else
 
-  if(m_lapCounter > 0){
+  if(m_lapCounter > m_nLapsToGo){
     int nLong = virtualPointsLongFinal.rows();
     int nShort = virtualPointsShortFinal.rows();
 
