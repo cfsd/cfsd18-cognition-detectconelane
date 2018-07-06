@@ -73,6 +73,7 @@ class DetectConeLane {
   float m_widthSeparationMargin;
   float m_maxConeLengthSeparation;
   float m_lengthSeparationMargin;
+  bool m_noConesReceived;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   bool m_newClock;

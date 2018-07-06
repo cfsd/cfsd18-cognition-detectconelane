@@ -40,6 +40,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_widthSeparationMargin{(commandlineArguments["widthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["widthSeparationMargin"]))) : (1.0f)}
 , m_maxConeLengthSeparation{(commandlineArguments["maxConeLengthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeLengthSeparation"]))) : (5.0f)}
 , m_lengthSeparationMargin{(commandlineArguments["lengthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["lengthSeparationMargin"]))) : (1.0f)}
+, m_noConesReceived{false}
 , m_tick{}
 , m_tock{}
 , m_newClock{true}
@@ -74,7 +75,7 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
     m_latestLapIncrease = std::chrono::system_clock::now();
   }
 
-  int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0;
+  int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0, nNone = 0;
   Eigen::ArrayXXf extractedCones(currentFrame.size(),3);
   std::reverse_iterator<std::map<int,ConePackage>::iterator> it;
   int coneIndex = 0;
@@ -92,6 +93,7 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
     else if(theType == 2){ nRight++; }
     else if(theType == 3){ nSmall++; }
     else if(theType == 4){ nBig++; }
+    else if(theType == 666){ nNone++; }
     else
     {
       std::cout << "WARNING! Object " << coneIndex << " has invalid cone type: " << theType << std::endl;
@@ -102,9 +104,20 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
   } // End of while
 
   if(extractedCones.rows() > 0){
-    DetectConeLane::sortIntoSideArrays(extractedCones, nLeft, nRight, nSmall, nBig);
-  }
-}
+    if(nNone == extractedCones.rows()){
+      m_noConesReceived = true;
+    }
+    else if(nNone > 0){
+      std::cout << "WARNING! Signal for no cones detected mixed with detected cones" << std::endl;
+    }
+
+    if(!m_noConesReceived){
+      DetectConeLane::sortIntoSideArrays(extractedCones, nLeft, nRight, nSmall, nBig);
+    }
+  } // End of if
+
+} // End of receiveCombinedMessage
+
 
 void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLeft, int nRight, int nSmall, int nBig)
 {
@@ -231,8 +244,9 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     }
     else
     {
-      if(longSide.rows() == 0)
+      if(longSide.rows() == 0 || m_noConesReceived)
       { //std::cout<<"No Cones"<<"\n";
+        m_noConesReceived = false;
         //No cones
         opendlv::logic::perception::GroundSurfaceArea surfaceArea;
         surfaceArea.surfaceId(0);
