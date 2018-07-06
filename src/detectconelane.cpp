@@ -111,9 +111,8 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
       std::cout << "WARNING! Signal for no cones detected mixed with detected cones" << std::endl;
     }
 
-    if(!m_noConesReceived){
-      DetectConeLane::sortIntoSideArrays(extractedCones, nLeft, nRight, nSmall, nBig);
-    }
+    DetectConeLane::sortIntoSideArrays(extractedCones, nLeft, nRight, nSmall, nBig);
+
   } // End of if
 
 } // End of receiveCombinedMessage
