@@ -577,7 +577,7 @@ Eigen::ArrayXXf DetectConeLane::orderCones(Eigen::ArrayXXf cones, Eigen::ArrayXX
   Eigen::ArrayXXf orderedCones(nCones,2);
   float shortestDist;
   float tmpDist;
-  int closestConeIndex;
+  int closestConeIndex = -1000;
 
   // The first chosen cone is the one closest to the vehicle. After that it continues with the closest neighbour
   for(int i = 0; i < nCones; i = i+1)
@@ -708,39 +708,89 @@ Eigen::ArrayXXf DetectConeLane::insertNeededGuessedCones(Eigen::ArrayXXf longSid
       if(tmpDist < shortestDist)
       {
         shortestDist = tmpDist;
+      } // End of if
+    } // End of for
+    // Find closest guessed cone
+    for(int k = 0; k < nGuessedCones; k = k+1)
+    {
+      tmpDist = ((longSide.row(i)-guessedCones.row(k)).matrix()).norm();
+      if(tmpDist < shortestDist)
+      {
+        shortestDist = tmpDist;
      } // End of if
     } // End of for
 
-    // If the closest cone is not valid, create cone guesses perpendicular to both segments connected to the current cone.
+    // If the closest cone is too far away, create cone guesses perpendicular to both segments connected to the current cone.
     // If it's the first or last cone, there is only on segment available.
     if(shortestDist > distanceThreshold && longSide.rows()>1)
     {
       if(i == 0)
       {
         guess = DetectConeLane::guessCones(longSide.row(0),longSide.row(1),guessDistance,guessToTheLeft,true,false);
-        nGuessedCones = nGuessedCones+1;
       }
       else if(i == nConesLong-1)
       {
         guess = DetectConeLane::guessCones(longSide.row(nConesLong-2),longSide.row(nConesLong-1),guessDistance,guessToTheLeft,false,true);
-        nGuessedCones = nGuessedCones+1;
       }
       else
       {
-        //guess = DetectConeLane::guessCones(longSide.row(i-1),longSide.row(i),guessDistance,guessToTheLeft,false,true);
-        //nGuessedCones = nGuessedCones+1;
-        //guessedCones.row(nGuessedCones-1) = guess;
         guess = DetectConeLane::guessCones(longSide.row(i),longSide.row(i+1),guessDistance,guessToTheLeft,true,false);
-        nGuessedCones = nGuessedCones+1;
       } // End of else
 
-      guessedCones.row(nGuessedCones-1) = guess;
+      shortestDist = std::numeric_limits<float>::infinity();
+      // Find closest cone on the long side
+      for(int a = 0; a < nConesLong; a = a+1)
+      {
+        tmpDist = ((guess-longSide.row(a)).matrix()).norm();
+        if(tmpDist < shortestDist)
+        {
+          shortestDist = tmpDist;
+        } // End of if
+      } // End of for
+      // Find closest cone on the short side
+      for(int b = 0; b < nConesShort; b = b+1)
+      {
+        tmpDist = ((guess-shortSide.row(b)).matrix()).norm();
+        if(tmpDist < shortestDist)
+        {
+          shortestDist = tmpDist;
+        } // End of if
+      } // End of for
+      // Find closest guessed cone
+      for(int c = 0; c < nGuessedCones; c = c+1)
+      {
+        tmpDist = ((guess-guessedCones.row(c)).matrix()).norm();
+        if(tmpDist < shortestDist)
+        {
+          shortestDist = tmpDist;
+        } // End of if
+      } // End of for
+
+      // Only accept the guess if it's not too close to a cone or previous guess
+      if(shortestDist > 1.5)
+      {
+        nGuessedCones = nGuessedCones+1;
+        guessedCones.row(nGuessedCones-1) = guess;
+      } // End of if
     } // End of if
   } // End of for
 
   // Collect real and guessed cones in the same array, and order them
   Eigen::ArrayXXf guessedConesFinal = guessedCones.topRows(nGuessedCones);
-  Eigen::ArrayXXf realAndGuessedCones(nConesShort+nGuessedCones,2);
+  Eigen::ArrayXXf realAndGuessedCones;
+  if(nConesShort+nGuessedCones > 0)
+  {
+    realAndGuessedCones.resize(nConesShort+nGuessedCones,2);
+  }
+  else
+  {
+    // If there are neither real or guessed short side cones, force a guess for the last cone
+    realAndGuessedCones.resize(1,2);
+    guessedConesFinal.resize(1,2);
+    guessedConesFinal = DetectConeLane::guessCones(longSide.row(nConesLong-2),longSide.row(nConesLong-1),guessDistance,guessToTheLeft,false,true);
+    nGuessedCones = nGuessedCones + 1;
+    std::cout << "NOTE: Cone guesser has to guess close to a different cone" << std::endl;
+  }
   realAndGuessedCones.topRows(nConesShort) = shortSide;
   realAndGuessedCones.bottomRows(nGuessedCones) = guessedConesFinal;
 
