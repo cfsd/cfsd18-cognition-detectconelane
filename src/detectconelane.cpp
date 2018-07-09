@@ -778,7 +778,7 @@ Eigen::ArrayXXf DetectConeLane::insertNeededGuessedCones(Eigen::ArrayXXf longSid
   // Collect real and guessed cones in the same array, and order them
   Eigen::ArrayXXf guessedConesFinal = guessedCones.topRows(nGuessedCones);
   Eigen::ArrayXXf realAndGuessedCones;
-  if(nConesShort+nGuessedCones > 0)
+  if(nConesShort+nGuessedCones > 0 || nConesLong < 2)
   {
     realAndGuessedCones.resize(nConesShort+nGuessedCones,2);
   }
