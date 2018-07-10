@@ -35,6 +35,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_latestLapIncrease{std::chrono::system_clock::now()}
 , m_orangeVisibleInLatestFrame{false}
 , m_guessDistance{(commandlineArguments["guessDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["guessDistance"]))) : (3.0f)}
+, m_minGuessSeparation{(commandlineArguments["minGuessSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["minGuessSeparation"]))) : (1.5f)}
 , m_maxConeAngle{(commandlineArguments["maxConeAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeAngle"]))) : (1.570796325f)}
 , m_maxConeWidthSeparation{(commandlineArguments["maxConeWidthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeWidthSeparation"]))) : (3.0f)}
 , m_widthSeparationMargin{(commandlineArguments["widthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["widthSeparationMargin"]))) : (1.0f)}
@@ -767,7 +768,7 @@ Eigen::ArrayXXf DetectConeLane::insertNeededGuessedCones(Eigen::ArrayXXf longSid
       } // End of for
 
       // Only accept the guess if it's not too close to a cone or previous guess
-      if(shortestDist > 1.5)
+      if(shortestDist > m_minGuessSeparation)
       {
         nGuessedCones = nGuessedCones+1;
         guessedCones.row(nGuessedCones-1) = guess;

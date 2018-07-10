@@ -68,6 +68,7 @@ class DetectConeLane {
   std::chrono::time_point<std::chrono::system_clock> m_latestLapIncrease;
   bool m_orangeVisibleInLatestFrame;
   float m_guessDistance;
+  float m_minGuessSeparation;
   float m_maxConeAngle;
   float m_maxConeWidthSeparation;
   float m_widthSeparationMargin;
