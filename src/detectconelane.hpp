@@ -44,8 +44,7 @@ class DetectConeLane {
   void setUp();
   void tearDown();
 
-  double calculateHeading(double, double);
-  void sortIntoSideArrays(Eigen::ArrayXXf, int, int, int, int);
+  void sortIntoSideArrays(Eigen::ArrayXXf, int, int, int, int, int);
   void generateSurfaces(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf);
   Eigen::ArrayXXf Spherical2Cartesian(float, float, float);
   void findSafeLocalPath(Eigen::ArrayXXf, Eigen::ArrayXXf);

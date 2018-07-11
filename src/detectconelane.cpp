@@ -133,7 +133,7 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
     m_slamActivated = true;
   }
 
-  int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0, nNone = 0;
+  int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0, nNone = 0, nUnknown = 0;
   Eigen::ArrayXXf extractedCones(currentFrame.size(),3);
   std::reverse_iterator<std::map<int,ConePackage>::iterator> it;
   int coneIndex = 0;
@@ -155,6 +155,7 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
     else
     {
       std::cout << "WARNING! Object " << coneIndex << " has invalid cone type: " << theType << std::endl;
+      nUnknown++;
     } // End of else
 
     coneIndex++;
@@ -169,14 +170,14 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
       std::cout << "WARNING! Signal for no cones detected mixed with detected cones" << std::endl;
     }
 
-    DetectConeLane::sortIntoSideArrays(extractedCones, nLeft, nRight, nSmall, nBig);
+    DetectConeLane::sortIntoSideArrays(extractedCones, nLeft, nRight, nSmall, nBig, nUnknown);
 
   } // End of if
 
 } // End of receiveCombinedMessage
 
 
-void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLeft, int nRight, int nSmall, int nBig)
+void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLeft, int nRight, int nSmall, int nBig, int nUnknown)
 {
   int coneNum = extractedCones.rows();
   Eigen::ArrayXXf cone;
@@ -187,31 +188,59 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
   int a = 0, b = 0, c = 0, d = 0;
   int type;
 
-  // Convert to cartesian and sort by type
-  for(int k = 0; k < coneNum; k++){
-    cone = DetectConeLane::Spherical2Cartesian(extractedCones(k,0), 0.0f, extractedCones(k,1));
-    type = static_cast<int>(extractedCones(k,2));
-    if(type == 1)
-    {
-      coneLeft.row(a) = cone;
-      a++;
-    }
-    else if(type == 2)
-    {
-      coneRight.row(b) = cone;
-      b++;
-    }
-    else if(type == 3)
-    {
-      coneSmall.row(c) = cone;
-      c++;
-    }
-    else if(type == 4)
-    {
-      coneBig.row(d) = cone;
-      d++;
-    } // End of else
-  } // End of for
+  if(nLeft == 0 && nRight == 0 && nSmall + nBig + nUnknown > 0){
+    float x;
+    Eigen::ArrayXXf coneLeftTmp(nSmall + nBig + nUnknown,2);
+    Eigen::ArrayXXf coneRightTmp(nSmall + nBig + nUnknown,2);
+
+    for(int k = 0; k < coneNum; k++){
+      cone = DetectConeLane::Spherical2Cartesian(extractedCones(k,0), 0.0f, extractedCones(k,1));
+      x = extractedCones(k,0);
+      if(x > 0)
+      {
+        coneLeftTmp.row(a) = cone;
+        a++;
+      }
+      else
+      {
+        coneRightTmp.row(b) = cone;
+        b++;
+      } // End of else
+    } // End of for
+
+    coneLeft.resize(a,2);
+    coneRight.resize(b,2);
+    coneLeft = coneLeftTmp.topRows(a);
+    coneRight = coneRightTmp.topRows(b);
+  }
+  else
+  {
+    // Convert to cartesian and sort by type
+    for(int k = 0; k < coneNum; k++){
+      cone = DetectConeLane::Spherical2Cartesian(extractedCones(k,0), 0.0f, extractedCones(k,1));
+      type = static_cast<int>(extractedCones(k,2));
+      if(type == 1)
+      {
+        coneLeft.row(a) = cone;
+        a++;
+      }
+      else if(type == 2)
+      {
+        coneRight.row(b) = cone;
+        b++;
+      }
+      else if(type == 3)
+      {
+        coneSmall.row(c) = cone;
+        c++;
+      }
+      else if(type == 4)
+      {
+        coneBig.row(d) = cone;
+        d++;
+      } // End of else
+    } // End of for
+  } // End of else
 
   // Lap counter for cone detection. If two big orange cones disappear from view the counter is increased. The finish line position is also updated if possible.
   bool orangeVisibleInThisFrame = nBig > 1;
