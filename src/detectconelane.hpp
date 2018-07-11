@@ -37,12 +37,14 @@ class DetectConeLane {
   DetectConeLane(DetectConeLane const &) = delete;
   DetectConeLane &operator=(DetectConeLane const &) = delete;
   virtual ~DetectConeLane();
+  void nextPos(cluon::data::Envelope);
   void receiveCombinedMessage(std::map<int,ConePackage>, uint32_t);
 
  private:
   void setUp();
   void tearDown();
 
+  double calculateHeading(double, double);
   void sortIntoSideArrays(Eigen::ArrayXXf, int, int, int, int);
   void generateSurfaces(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf);
   Eigen::ArrayXXf Spherical2Cartesian(float, float, float);
@@ -73,10 +75,14 @@ class DetectConeLane {
   float m_widthSeparationMargin;
   float m_maxConeLengthSeparation;
   float m_lengthSeparationMargin;
+  std::array<double,2> m_gpsReference;
+  Eigen::Vector2d m_globalPos;
+  cluon::data::TimeStamp m_geolocationReceivedTime;
   bool m_noConesReceived;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   bool m_newClock;
+  std::mutex m_posMutex;
   std::mutex m_sendMutex;
   const double DEG2RAD = 0.017453292522222; // PI/180.0
 
