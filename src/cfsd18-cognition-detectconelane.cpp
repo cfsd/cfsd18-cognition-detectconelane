@@ -50,7 +50,16 @@ int32_t main(int32_t argc, char **argv) {
     uint32_t detectconeStamp = (commandlineArguments.count("detectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["detectConeId"]))):(118);
     uint32_t slamStamp = (commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120);
     uint32_t simDetectconeStamp = (commandlineArguments.count("simDetectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["simDetectConeId"]))):(231);
+    uint32_t estimationStamp = (commandlineArguments.count("estimationId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["estimationId"]))):(112);
     uint32_t id = (commandlineArguments.count("id")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["id"]))):(211);
+
+    auto poseEnvelope{[&detectconelane,senderStamp = estimationStamp](cluon::data::Envelope &&envelope)
+      {
+        if(envelope.senderStamp() == senderStamp){
+          detectconelane.nextPos(envelope);
+        }
+      } 
+    };
 
     auto coneEnvelope{[detector = detectconeStamp, slam = slamStamp, simulation = simDetectconeStamp ,&collector](cluon::data::Envelope &&envelope)
       {
@@ -63,6 +72,7 @@ int32_t main(int32_t argc, char **argv) {
     od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),coneEnvelope);
     od4.dataTrigger(opendlv::logic::perception::ObjectDistance::ID(),coneEnvelope);
     od4.dataTrigger(opendlv::logic::perception::ObjectType::ID(),coneEnvelope);
+    od4.dataTrigger(opendlv::logic::sensation::Geolocation::ID(),poseEnvelope);
 
     // Just sleep as this microservice is data driven.
     using namespace std::literals::chrono_literals;
