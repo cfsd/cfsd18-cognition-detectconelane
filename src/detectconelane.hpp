@@ -64,6 +64,7 @@ class DetectConeLane {
   uint32_t m_slamStamp;
   bool m_alwaysSlam;
   bool m_slamActivated;
+  bool m_isRunning;
   int m_lapCounter;
   int m_nLapsToGo;
   int m_lapCounterLockTime;
@@ -78,6 +79,11 @@ class DetectConeLane {
   std::array<double,2> m_gpsReference;
   Eigen::Vector2d m_globalPos;
   cluon::data::TimeStamp m_geolocationReceivedTime;
+  bool m_finishFound;
+  Eigen::Vector2d m_finishPos;
+  double m_finishRadius;
+  bool m_nearFinishInLatestFrame;
+  bool m_globalPosReceived;
   bool m_noConesReceived;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;

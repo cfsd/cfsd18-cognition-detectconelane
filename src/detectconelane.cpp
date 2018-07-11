@@ -30,6 +30,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_slamStamp{(commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120)}
 , m_alwaysSlam{(commandlineArguments["alwaysSlam"].size() != 0) ? (std::stoi(commandlineArguments["alwaysSlam"])==1) : (false)}
 , m_slamActivated{m_alwaysSlam}
+, m_isRunning{false}
 , m_lapCounter{0}
 , m_nLapsToGo{(commandlineArguments["nLapsToGo"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nLapsToGo"]))) : (10)}
 , m_lapCounterLockTime{(commandlineArguments["lapCounterLockTime"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["lapCounterLockTime"]))) : (10)}
@@ -44,6 +45,11 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_gpsReference()
 , m_globalPos()
 , m_geolocationReceivedTime()
+, m_finishFound{false}
+, m_finishPos{}
+, m_finishRadius{}
+, m_nearFinishInLatestFrame{false}
+, m_globalPosReceived{false}
 , m_noConesReceived{false}
 , m_tick{}
 , m_tock{}
@@ -76,7 +82,7 @@ void DetectConeLane::tearDown()
 
 void DetectConeLane::nextPos(cluon::data::Envelope data){
     //#########################Recieve Odometry##################################
-  
+
   std::unique_lock<std::mutex> lockPos(m_posMutex);
   auto odometry = cluon::extractMessage<opendlv::logic::sensation::Geolocation>(std::move(data));
   m_geolocationReceivedTime = data.sampleTimeStamp();
@@ -91,7 +97,25 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
   std::array<double,2> WGS84Reading = wgs84::toCartesian(m_gpsReference, WGS84ReadingTemp);
   m_globalPos << WGS84Reading[0],
                  WGS84Reading[1];
-// TODO: Find finish line position and compare vehicle position with it.
+  m_globalPosReceived = true;
+
+  if(!m_finishFound){
+    m_finishFound = true;
+    m_finishPos = m_globalPos;
+    m_finishRadius = 6.0;
+  }
+
+  // Lap counter for position. If the vehicle leaves the area close to the finish line the lap counter is increased.
+  bool nearFinishInThisFrame = (m_finishPos - m_globalPos).norm() < m_finishRadius;
+  if(!nearFinishInThisFrame && m_nearFinishInLatestFrame){
+    std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
+    if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
+      m_lapCounter++;
+      m_latestLapIncrease = std::chrono::system_clock::now();
+    }
+  }
+  m_nearFinishInLatestFrame = nearFinishInThisFrame;
+
 } // End of nextPos
 
 
@@ -99,10 +123,13 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
 
   m_tick = std::chrono::system_clock::now();
 
+  if(!m_isRunning){
+    m_isRunning = true;
+    m_latestLapIncrease = std::chrono::system_clock::now();
+  }
+
   if(!m_slamActivated && sender == m_slamStamp){
     m_slamActivated = true;
-    m_lapCounter++;
-    m_latestLapIncrease = std::chrono::system_clock::now();
   }
 
   int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0, nNone = 0;
@@ -185,12 +212,19 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
     } // End of else
   } // End of for
 
+  // Lap counter for cone detection. If two big orange cones disappear from view the counter is increased. The finish line position is also updated if possible.
   bool orangeVisibleInThisFrame = nBig > 1;
-  if(m_slamActivated && !orangeVisibleInThisFrame && m_orangeVisibleInLatestFrame){
+  if(!orangeVisibleInThisFrame && m_orangeVisibleInLatestFrame){
     std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
     if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
       m_lapCounter++;
       m_latestLapIncrease = std::chrono::system_clock::now();
+    }
+    if(m_globalPosReceived){
+      std::unique_lock<std::mutex> lockPos(m_posMutex);
+      m_finishPos = m_globalPos;
+      m_finishRadius = 2.0;
+      m_finishFound = true;
     }
   }
   m_orangeVisibleInLatestFrame = orangeVisibleInThisFrame;
