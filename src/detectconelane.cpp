@@ -54,8 +54,10 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_noConesReceived{false}
 , m_tick{}
 , m_tock{}
+, m_sampleTime{}
 , m_newClock{true}
 , m_posMutex()
+, m_timeStampMutex()
 , m_sendMutex()
 {
   /*std::cout<<"DetectConeLane set up with "<<commandlineArguments.size()<<" commandlineArguments: "<<std::endl;
@@ -120,9 +122,13 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
 } // End of nextPos
 
 
-void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame, uint32_t sender){
+void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame, cluon::data::TimeStamp sampleTime, uint32_t sender){
 
   m_tick = std::chrono::system_clock::now();
+  {
+    std::unique_lock<std::mutex> lockPos(m_timeStampMutex);
+    m_sampleTime = sampleTime;
+  }
 
   if(!m_isRunning){
     m_isRunning = true;
@@ -325,8 +331,11 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
 
   //std::cout<<"longSide accepted cones: "<<longSide<<"\n";
   //std::cout<<"shortSide accepted cones: "<<shortSide<<"\n";
-  std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
-  cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+  cluon::data::TimeStamp sampleTimeCopy;
+  {
+    std::unique_lock<std::mutex> lockPos(m_timeStampMutex);
+    sampleTimeCopy = m_sampleTime;
+  }
 
   {
     std::unique_lock<std::mutex> lockSend(m_sendMutex);
@@ -351,7 +360,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
         surfaceArea.y3(0.0f);
         surfaceArea.x4(0.0f);
         surfaceArea.y4(0.0f);
-        m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+        m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
         ////std::cout<<"DetectConeLane send surface: "<<" x1: "<<1<<" y1: "<<0<<" x2: "<<1<<" y2: "<<0<<" x3: "<<0<<" y3: "<<0<<" x4: "<<0<<" y4 "<<0<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
       }
       else if(longSide.rows() == 1 && shortSide.rows() == 0)
@@ -386,7 +395,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
         surfaceArea.y3(aimpoint(0,1));
         surfaceArea.x4(aimpoint(0,0));
         surfaceArea.y4(aimpoint(0,1));
-        m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+        m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
         /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)+1.5f*direction<<" x4: "<<longSide(0,0)<<" y4 "<<longSide(0,1)+1.5f*direction<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
         */
       }
@@ -403,7 +412,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
         surfaceArea.y3(longSide(0,1));
         surfaceArea.x4(shortSide(0,0));
         surfaceArea.y4(shortSide(0,1));
-        m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+        m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
         /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)<<" x4: "<<shortSide(0,0)<<" y4 "<<shortSide(0,1)<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
         */
 
@@ -975,8 +984,11 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
 {
   int nSurfaces = virtualPointsLong.rows()/2;
   //std::cout << "Sending " << nSurfaces << " surfaces" << std::endl;
-  std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
-  cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+  cluon::data::TimeStamp sampleTimeCopy;
+  {
+    std::unique_lock<std::mutex> lockPos(m_timeStampMutex);
+    sampleTimeCopy = m_sampleTime;
+  }
 
   for(int n = 0; n < nSurfaces; n++)
   {
@@ -990,7 +1002,7 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
     surfaceArea.y3(virtualPointsLong(2*n+1,1));
     surfaceArea.x4(virtualPointsShort(2*n+1,0));
     surfaceArea.y4(virtualPointsShort(2*n+1,1));
-    m_od4.send(surfaceArea, sampleTime , m_senderStamp);
+    m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
     /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<virtualPointsLong(2*n,0)<<" y1: "<<virtualPointsLong(2*n,1)<<" x2: "<<virtualPointsShort(2*n,0)<<" y2: "<<virtualPointsShort(2*n,1)<<" x3: "<<virtualPointsLong(2*n+1,0)<<" y3: "<<virtualPointsLong(2*n+1,1);
     std::cout<<" x4: "<<virtualPointsShort(2*n+1,0)<<" y4 "<<virtualPointsShort(2*n+1,1)<<" frame ID: "<<nSurfaces-n-1<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
     */

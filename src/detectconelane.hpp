@@ -38,7 +38,7 @@ class DetectConeLane {
   DetectConeLane &operator=(DetectConeLane const &) = delete;
   virtual ~DetectConeLane();
   void nextPos(cluon::data::Envelope);
-  void receiveCombinedMessage(std::map<int,ConePackage>, uint32_t);
+  void receiveCombinedMessage(std::map<int,ConePackage>, cluon::data::TimeStamp, uint32_t);
 
  private:
   void setUp();
@@ -87,8 +87,10 @@ class DetectConeLane {
   bool m_noConesReceived;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
+  cluon::data::TimeStamp m_sampleTime;
   bool m_newClock;
   std::mutex m_posMutex;
+  std::mutex m_timeStampMutex;
   std::mutex m_sendMutex;
   const double DEG2RAD = 0.017453292522222; // PI/180.0
 

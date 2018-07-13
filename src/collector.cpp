@@ -180,7 +180,7 @@ void Collector::GetCompleteFrame(){
 
 void Collector::SendFrame(){
     //std::cout << "sending " << m_currentFrame.size() << " cones" << std::endl;
-    m_module.receiveCombinedMessage(m_currentFrame,m_sender);
+    m_module.receiveCombinedMessage(m_currentFrame, m_currentFrameTime, m_sender);
 
     m_tock = std::chrono::system_clock::now();
     std::chrono::duration<double> dur = m_tock-m_tick;
