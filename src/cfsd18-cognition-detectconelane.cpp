@@ -67,7 +67,7 @@ int32_t main(int32_t argc, char **argv) {
         if(sender == slamStamp){
           detectconeStamp = slamStamp;
         }
-        if(sender == detector || sender == slam || sender == simulation){
+        if(sender == detectconeStamp || sender == simDetectconeStamp){
           collector.CollectCones(envelope);
         }
       }
