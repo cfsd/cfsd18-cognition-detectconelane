@@ -61,9 +61,12 @@ int32_t main(int32_t argc, char **argv) {
       } 
     };
 
-    auto coneEnvelope{[detector = detectconeStamp, slam = slamStamp, simulation = simDetectconeStamp ,&collector](cluon::data::Envelope &&envelope)
+    auto coneEnvelope{[&detectconeStamp, &slamStamp, &simDetectconeStamp ,&collector](cluon::data::Envelope &&envelope)
       {
         uint32_t sender = envelope.senderStamp();
+        if(sender == slamStamp){
+          detectConeStamp = slamStamp;
+        }
         if(sender == detector || sender == slam || sender == simulation){
           collector.CollectCones(envelope);
         }
