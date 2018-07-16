@@ -403,15 +403,14 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
       { //std::cout<<"1 on each side"<<"\n";
         //1 on each side
         opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-        surfaceArea.surfaceId(0);
-        surfaceArea.x1(0.0f);
-        surfaceArea.y1(0.0f);
-        surfaceArea.x2(0.0f);
-        surfaceArea.y2(0.0f);
-        surfaceArea.x3(longSide(0,0));
-        surfaceArea.y3(longSide(0,1));
-        surfaceArea.x4(shortSide(0,0));
-        surfaceArea.y4(shortSide(0,1));
+        surfaceArea.x1(longSide(0,0));
+        surfaceArea.y1(longSide(0,1));
+        surfaceArea.x2(shortSide(0,0));
+        surfaceArea.y2(shortSide(0,1));
+        surfaceArea.x3(0.0f);
+        surfaceArea.y3(0.0f);
+        surfaceArea.x4(0.0f);
+        surfaceArea.y4(0.0f);
         m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
         /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)<<" x4: "<<shortSide(0,0)<<" y4 "<<shortSide(0,1)<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
         */
