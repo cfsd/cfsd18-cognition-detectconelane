@@ -46,9 +46,12 @@ int32_t main(int32_t argc, char **argv) {
     DetectConeLane detectconelane(commandlineArguments,od4);
     int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(60);
     int separationTimeMs = (commandlineArguments.count("separationTimeMs")>0)?(std::stoi(commandlineArguments["separationTimeMs"])):(5);
-    Collector collector(detectconelane,gatheringTimeMs,separationTimeMs,3);
+    bool accelerationMode = (commandlineArguments["useAccelerationMode"].size() != 0) ? (std::stoi(commandlineArguments["useAccelerationMode"])==1) : (false);
+    int nMessageTypes = (accelerationMode)?(2):(3);
+    Collector collector(detectconelane,gatheringTimeMs,separationTimeMs,nMessageTypes);
     uint32_t detectconeStamp = (commandlineArguments.count("detectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["detectConeId"]))):(118);
     uint32_t slamStamp = (commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120);
+    uint32_t attentionStamp = (commandlineArguments.count("attentionId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["attentionId"]))):(116);
     uint32_t simDetectconeStamp = (commandlineArguments.count("simDetectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["simDetectConeId"]))):(231);
     uint32_t estimationStamp = (commandlineArguments.count("estimationId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["estimationId"]))):(112);
     uint32_t id = (commandlineArguments.count("id")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["id"]))):(211);
@@ -59,6 +62,14 @@ int32_t main(int32_t argc, char **argv) {
           detectconelane.nextPos(envelope);
         }
       } 
+    };
+
+    auto pointEnvelope{[senderStamp = attentionStamp, &collector](cluon::data::Envelope &&envelope)
+      {
+        if(envelope.senderStamp() == senderStamp){
+          collector.CollectCones(envelope);
+        }
+      }
     };
 
     auto coneEnvelope{[&detectconeStamp, &slamStamp, &simDetectconeStamp ,&collector](cluon::data::Envelope &&envelope)
@@ -72,9 +83,18 @@ int32_t main(int32_t argc, char **argv) {
         }
       }
     };
-    od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),coneEnvelope);
-    od4.dataTrigger(opendlv::logic::perception::ObjectDistance::ID(),coneEnvelope);
-    od4.dataTrigger(opendlv::logic::perception::ObjectType::ID(),coneEnvelope);
+
+    if(accelerationMode){
+      // Direction and distance from attention
+      od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),pointEnvelope);
+      od4.dataTrigger(opendlv::logic::perception::ObjectDistance::ID(),pointEnvelope);
+    }else{
+      // Direction, distance and type from either detectcone, slam or simulation
+      od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),coneEnvelope);
+      od4.dataTrigger(opendlv::logic::perception::ObjectDistance::ID(),coneEnvelope);
+      od4.dataTrigger(opendlv::logic::perception::ObjectType::ID(),coneEnvelope);
+    }
+    // GPS
     od4.dataTrigger(opendlv::logic::sensation::Geolocation::ID(),poseEnvelope);
 
     // Just sleep as this microservice is data driven.

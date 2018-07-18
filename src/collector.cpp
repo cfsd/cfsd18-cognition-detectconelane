@@ -170,6 +170,15 @@ void Collector::GetCompleteFrame(){
             currentFrameCopy.erase(it2->first);
             //std::cout << "Incomplete frame with id " << it2->first << " removed" << std::endl;
         }
+        else if(m_packetSize == 2){
+          // If cones are sent from lidar, give them type 0
+          opendlv::logic::perception::ObjectType type;
+          uint32_t id = it2->first;
+          type.objectId(id);
+          type.type(0);
+          std::get<2>(m_currentFrame[id]) = type;
+          std::get<2>(currentFrameCopy[id]) = type;
+        }
         it2++;
         //it++;
     }
