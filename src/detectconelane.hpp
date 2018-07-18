@@ -63,6 +63,7 @@ class DetectConeLane {
   uint32_t m_slamStamp;
   bool m_alwaysSlam;
   bool m_slamActivated;
+  bool m_accelerationMode;
   bool m_isRunning;
   int m_lapCounter;
   int m_nLapsToGo;

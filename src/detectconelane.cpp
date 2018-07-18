@@ -30,6 +30,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_slamStamp{(commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120)}
 , m_alwaysSlam{(commandlineArguments["alwaysSlam"].size() != 0) ? (std::stoi(commandlineArguments["alwaysSlam"])==1) : (false)}
 , m_slamActivated{m_alwaysSlam}
+, m_accelerationMode{(commandlineArguments["useAccelerationMode"].size() != 0) ? (std::stoi(commandlineArguments["useAccelerationMode"])==1) : (false)}
 , m_isRunning{false}
 , m_lapCounter{0}
 , m_nLapsToGo{(commandlineArguments["nLapsToGo"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nLapsToGo"]))) : (10)}
@@ -105,7 +106,11 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
   if(!m_finishFound){
     m_finishFound = true;
     m_finishPos = m_globalPos;
-    m_finishRadius = 6.0;
+    if(m_accelerationMode){
+      m_finishRadius = 75.0;
+    }else{
+      m_finishRadius = 6.0;
+    }
   }
 
   // Lap counter for position. If the vehicle leaves the area close to the finish line the lap counter is increased.
