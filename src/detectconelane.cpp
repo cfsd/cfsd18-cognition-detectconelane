@@ -165,7 +165,9 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
     else if(theType == 666){ nNone++; }
     else
     {
-      std::cout << "WARNING! Object " << coneIndex << " has invalid cone type: " << theType << std::endl;
+      if(!m_accelerationMode){
+        std::cout << "WARNING! Object " << coneIndex << " has invalid cone type: " << theType << std::endl;
+      }
       nUnknown++;
     } // End of else
 
