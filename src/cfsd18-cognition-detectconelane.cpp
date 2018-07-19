@@ -64,9 +64,10 @@ int32_t main(int32_t argc, char **argv) {
       } 
     };
 
-    auto pointEnvelope{[senderStamp = attentionStamp, &collector](cluon::data::Envelope &&envelope)
+    auto pointEnvelope{[&attentionStamp, &simDetectconeStamp, &collector](cluon::data::Envelope &&envelope)
       {
-        if(envelope.senderStamp() == senderStamp){
+        uint32_t sender = envelope.senderStamp();
+        if(sender == attentionStamp || sender == simDetectconeStamp){
           collector.CollectCones(envelope);
         }
       }
@@ -85,7 +86,7 @@ int32_t main(int32_t argc, char **argv) {
     };
 
     if(accelerationMode){
-      // Direction and distance from attention
+      // Direction and distance from attention or simulation
       od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),pointEnvelope);
       od4.dataTrigger(opendlv::logic::perception::ObjectDistance::ID(),pointEnvelope);
     }else{
