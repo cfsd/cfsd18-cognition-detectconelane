@@ -387,9 +387,9 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
         Eigen::ArrayXXf aimpoint(1,2);
         if(angledAim){
           // Finding a point 90 degrees to the side is the same operation as in guessCones.
-          aimpoint = DetectConeLane::guessCones(location, longSide.row(0), 1.5f, !leftIsLong, false, true);
+          aimpoint = DetectConeLane::guessCones(location, longSide.row(0), m_guessDistance/2, !leftIsLong, false, true);
         }else{
-          aimpoint << longSide(0,0),longSide(0,1)+1.5f*direction;
+          aimpoint << longSide(0,0),longSide(0,1)+direction*m_guessDistance/2;
         }
 
         opendlv::logic::perception::GroundSurfaceArea surfaceArea;
