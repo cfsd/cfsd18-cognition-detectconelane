@@ -70,6 +70,13 @@ class DetectConeLane {
   int m_lapCounterLockTime;
   std::chrono::time_point<std::chrono::system_clock> m_latestLapIncrease;
   bool m_orangeVisibleInLatestFrame;
+  bool m_useNewConeLapCounter;
+  bool m_countOrangeFrames;
+  bool m_countDisappearanceFrames;
+  int m_orangeFramesInARow;
+  int m_disappearanceFramesInARow;
+  int m_nMinOrangeFrames;
+  int m_nMinDisappearanceFrames;
   float m_guessDistance;
   float m_minGuessSeparation;
   bool m_latePerpGuessing;
