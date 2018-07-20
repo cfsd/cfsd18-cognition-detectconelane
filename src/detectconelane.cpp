@@ -39,6 +39,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_orangeVisibleInLatestFrame{false}
 , m_guessDistance{(commandlineArguments["guessDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["guessDistance"]))) : (3.0f)}
 , m_minGuessSeparation{(commandlineArguments["minGuessSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["minGuessSeparation"]))) : (1.5f)}
+, m_latePerpGuessing{(commandlineArguments["latePerpGuessing"].size() != 0) ? (std::stoi(commandlineArguments["latePerpGuessing"])==1) : (false)}
 , m_maxConeAngle{(commandlineArguments["maxConeAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeAngle"]))) : (1.570796325f)}
 , m_maxConeWidthSeparation{(commandlineArguments["maxConeWidthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeWidthSeparation"]))) : (3.0f)}
 , m_widthSeparationMargin{(commandlineArguments["widthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["widthSeparationMargin"]))) : (1.0f)}
@@ -843,7 +844,11 @@ Eigen::ArrayXXf DetectConeLane::insertNeededGuessedCones(Eigen::ArrayXXf longSid
       }
       else
       {
-        guess = DetectConeLane::guessCones(longSide.row(i),longSide.row(i+1),guessDistance,guessToTheLeft,true,false);
+        if(m_latePerpGuessing){
+          guess = DetectConeLane::guessCones(longSide.row(i),longSide.row(i+1),guessDistance,guessToTheLeft,true,false);
+        }else{
+          guess = DetectConeLane::guessCones(longSide.row(i-1),longSide.row(i),guessDistance,guessToTheLeft,false,true);
+        } // End of else
       } // End of else
 
       shortestDist = std::numeric_limits<float>::infinity();

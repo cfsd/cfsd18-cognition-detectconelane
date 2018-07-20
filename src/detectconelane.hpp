@@ -72,6 +72,7 @@ class DetectConeLane {
   bool m_orangeVisibleInLatestFrame;
   float m_guessDistance;
   float m_minGuessSeparation;
+  bool m_latePerpGuessing;
   float m_maxConeAngle;
   float m_maxConeWidthSeparation;
   float m_widthSeparationMargin;
