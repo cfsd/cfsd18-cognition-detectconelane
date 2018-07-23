@@ -85,9 +85,7 @@ class DetectConeLane {
   float m_widthSeparationMargin;
   float m_maxConeLengthSeparation;
   float m_lengthSeparationMargin;
-  std::array<double,2> m_gpsReference;
   Eigen::Vector2d m_globalPos;
-  cluon::data::TimeStamp m_geolocationReceivedTime;
   bool m_finishFound;
   Eigen::Vector2d m_finishPos;
   double m_finishRadius;

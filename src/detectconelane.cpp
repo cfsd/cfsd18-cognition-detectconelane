@@ -22,7 +22,6 @@
 #include <mutex>
 #include <condition_variable>
 #include "detectconelane.hpp"
-#include "WGS84toCartesian.hpp"
 
 DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_od4(od4)
@@ -52,9 +51,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_widthSeparationMargin{(commandlineArguments["widthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["widthSeparationMargin"]))) : (1.0f)}
 , m_maxConeLengthSeparation{(commandlineArguments["maxConeLengthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeLengthSeparation"]))) : (5.0f)}
 , m_lengthSeparationMargin{(commandlineArguments["lengthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["lengthSeparationMargin"]))) : (1.0f)}
-, m_gpsReference()
 , m_globalPos()
-, m_geolocationReceivedTime()
 , m_finishFound{false}
 , m_finishPos{}
 , m_finishRadius{}
@@ -73,10 +70,6 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
   for (std::map<std::string, std::string >::iterator it = commandlineArguments.begin();it !=commandlineArguments.end();it++){
     std::cout<<it->first<<" "<<it->second<<std::endl;
   }*/
-
-  // Default gps reference is set to the docks near Revere
-  m_gpsReference[0] = (commandlineArguments["refLatitude"].size() != 0) ? (static_cast<double>(std::stod(commandlineArguments["refLatitude"]))):(57.710482);
-  m_gpsReference[1] = (commandlineArguments["refLongitude"].size() != 0) ? static_cast<double>(std::stod(commandlineArguments["refLongitude"])):(11.950813);
 }
 
 DetectConeLane::~DetectConeLane()
@@ -97,18 +90,9 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
 
   std::unique_lock<std::mutex> lockPos(m_posMutex);
   auto odometry = cluon::extractMessage<opendlv::logic::sensation::Geolocation>(std::move(data));
-  m_geolocationReceivedTime = data.sampleTimeStamp();
 
-  double longitude = odometry.longitude();
-  double latitude = odometry.latitude();
-
-  std::array<double,2> WGS84ReadingTemp;
-  WGS84ReadingTemp[0] = latitude;
-  WGS84ReadingTemp[1] = longitude;
-
-  std::array<double,2> WGS84Reading = wgs84::toCartesian(m_gpsReference, WGS84ReadingTemp);
-  m_globalPos << WGS84Reading[0],
-                 WGS84Reading[1];
+  m_globalPos << odometry.longitude(),
+                 odometry.latitude();
   m_globalPosReceived = true;
 
   if(!m_finishFound){
