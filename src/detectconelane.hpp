@@ -61,10 +61,12 @@ class DetectConeLane {
 
   cluon::OD4Session &m_od4;
   int m_senderStamp;
+  uint32_t m_detectconeStamp;
   uint32_t m_slamStamp;
   bool m_alwaysSlam;
   bool m_slamActivated;
   bool m_accelerationMode;
+  bool m_skidpadMode;
   bool m_isRunning;
   int m_lapCounter;
   int m_nLapsToGo;

@@ -26,10 +26,12 @@
 DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_od4(od4)
 , m_senderStamp{(commandlineArguments["id"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["id"]))) : (211)}
+, m_detectconeStamp{(commandlineArguments.count("detectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["detectConeId"]))):(118)}
 , m_slamStamp{(commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120)}
 , m_alwaysSlam{(commandlineArguments["alwaysSlam"].size() != 0) ? (std::stoi(commandlineArguments["alwaysSlam"])==1) : (false)}
 , m_slamActivated{m_alwaysSlam}
 , m_accelerationMode{(commandlineArguments["useAccelerationMode"].size() != 0) ? (std::stoi(commandlineArguments["useAccelerationMode"])==1) : (false)}
+, m_skidpadMode{(commandlineArguments["useSkidpadMode"].size() != 0) ? (std::stoi(commandlineArguments["useSkidpadMode"])==1) : (false)}
 , m_isRunning{false}
 , m_lapCounter{0}
 , m_nLapsToGo{(commandlineArguments["nLapsToGo"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nLapsToGo"]))) : (10)}
@@ -88,7 +90,7 @@ void DetectConeLane::tearDown()
 
 
 void DetectConeLane::nextPos(cluon::data::Envelope data){
-    //#########################Recieve Odometry##################################
+  //Receive odometry (not in skidpad mode)
 
   std::unique_lock<std::mutex> lockPos(m_posMutex);
   auto odometry = cluon::extractMessage<opendlv::logic::sensation::Geolocation>(std::move(data));
@@ -145,6 +147,8 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
 
   if(!m_slamActivated && sender == m_slamStamp){
     m_slamActivated = true;
+  }else if(m_slamActivated && sender == m_detectconeStamp){
+    m_slamActivated = false;
   }
 
   int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0, nNone = 0, nUnknown = 0;
@@ -228,6 +232,11 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
     coneRight.resize(b,2);
     coneLeft = coneLeftTmp.topRows(a);
     coneRight = coneRightTmp.topRows(b);
+
+    // If we only see orange cones in skidpad we are done.
+    if(m_skidpadMode){
+      m_lapCounter = m_nLapsToGo;
+    }
   }
   else
   {
@@ -260,59 +269,22 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
 
   //Lap counter for cone detection. 
   bool orangeVisibleInThisFrame;
-  {
+  if(m_slamActivated){
     std::unique_lock<std::mutex> lockOrange(m_orangeMutex);
     orangeVisibleInThisFrame = m_nOrange > 1;
+  }else{
+    orangeVisibleInThisFrame = nBig > 1;
   }
 
-  if(!m_useNewConeLapCounter){
-    // If two big orange cones disappear from view the counter is increased. The finish line position is also updated if possible.
-    if(!orangeVisibleInThisFrame && m_orangeVisibleInLatestFrame){
-      std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
-      if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
-        m_lapCounter++;
-        m_latestLapIncrease = std::chrono::system_clock::now();
-      }
-      if(m_globalPosReceived){
-        std::unique_lock<std::mutex> lockPos(m_posMutex);
-        m_finishPos = m_globalPos;
-        m_finishRadius = 2.0;
-        m_finishFound = true;
-      }
-    }
-    m_orangeVisibleInLatestFrame = orangeVisibleInThisFrame;
-  }
-  else // Use new cone lap counter
-  {
-    // If the finish line detection process (counting frames) is not ongoing, start counting how many frames in a row contain orange cones.
-    if(orangeVisibleInThisFrame && !m_countOrangeFrames && !m_countDisappearanceFrames){
-      m_countOrangeFrames = true;
-    }
-
-    // If we want to count orange frames and we can see orange cones, increase the counter. If the counter reaches our threshold start counting how many frames in a row do not contain orange cones.
-    if(m_countOrangeFrames && orangeVisibleInThisFrame){
-      m_orangeFramesInARow++;
-      if(m_orangeFramesInARow >= m_nMinOrangeFrames){
-        m_orangeFramesInARow = 0;
-        m_countDisappearanceFrames = true;
-        m_countOrangeFrames = false;
-      }
-    }else if(m_countOrangeFrames && !orangeVisibleInThisFrame){
-      m_orangeFramesInARow = 0;
-    }
-
-    // If we want to count non-orange frames and we can not see orange cones, increase the counter. If the counter reaches our threshold the lap counter is increased and we stop counting frames.
-    if(m_countDisappearanceFrames && !orangeVisibleInThisFrame){
-      m_disappearanceFramesInARow++;
-      if(m_disappearanceFramesInARow >= m_nMinDisappearanceFrames){
-        m_disappearanceFramesInARow = 0;
-        m_countDisappearanceFrames = false;
+  if(!m_skidpadMode){
+    if(!m_useNewConeLapCounter){
+      // If two big orange cones disappear from view the counter is increased. The finish line position is also updated if possible.
+      if(!orangeVisibleInThisFrame && m_orangeVisibleInLatestFrame){
         std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
         if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
           m_lapCounter++;
           m_latestLapIncrease = std::chrono::system_clock::now();
         }
-        // The finish line position is updated if possible.
         if(m_globalPosReceived){
           std::unique_lock<std::mutex> lockPos(m_posMutex);
           m_finishPos = m_globalPos;
@@ -320,10 +292,51 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
           m_finishFound = true;
         }
       }
-    }else if(m_countDisappearanceFrames && orangeVisibleInThisFrame){
-      m_disappearanceFramesInARow = 0;
+      m_orangeVisibleInLatestFrame = orangeVisibleInThisFrame;
     }
-  } // End of cone lap counter
+    else // Use new cone lap counter
+    {
+      // If the finish line detection process (counting frames) is not ongoing, start counting how many frames in a row contain orange cones.
+      if(orangeVisibleInThisFrame && !m_countOrangeFrames && !m_countDisappearanceFrames){
+        m_countOrangeFrames = true;
+      }
+
+      // If we want to count orange frames and we can see orange cones, increase the counter. If the counter reaches our threshold start counting how many frames in a row do not contain orange cones.
+      if(m_countOrangeFrames && orangeVisibleInThisFrame){
+        m_orangeFramesInARow++;
+        if(m_orangeFramesInARow >= m_nMinOrangeFrames){
+          m_orangeFramesInARow = 0;
+          m_countDisappearanceFrames = true;
+          m_countOrangeFrames = false;
+        }
+      }else if(m_countOrangeFrames && !orangeVisibleInThisFrame){
+        m_orangeFramesInARow = 0;
+      }
+
+      // If we want to count non-orange frames and we can not see orange cones, increase the counter. If the counter reaches our threshold the lap counter is increased and we stop counting frames.
+      if(m_countDisappearanceFrames && !orangeVisibleInThisFrame){
+        m_disappearanceFramesInARow++;
+        if(m_disappearanceFramesInARow >= m_nMinDisappearanceFrames){
+          m_disappearanceFramesInARow = 0;
+          m_countDisappearanceFrames = false;
+          std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
+          if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
+            m_lapCounter++;
+            m_latestLapIncrease = std::chrono::system_clock::now();
+          }
+          // The finish line position is updated if possible.
+          if(m_globalPosReceived){
+            std::unique_lock<std::mutex> lockPos(m_posMutex);
+            m_finishPos = m_globalPos;
+            m_finishRadius = 2.0;
+            m_finishFound = true;
+          }
+        }
+      }else if(m_countDisappearanceFrames && orangeVisibleInThisFrame){
+        m_disappearanceFramesInARow = 0;
+      }
+    } // End of cone lap counter
+  } // End of if
 
   Eigen::ArrayXXf location(1,2);
   location << 0,0;

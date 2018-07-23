@@ -46,6 +46,7 @@ int32_t main(int32_t argc, char **argv) {
     DetectConeLane detectconelane(commandlineArguments,od4);
     int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(60);
     int separationTimeMs = (commandlineArguments.count("separationTimeMs")>0)?(std::stoi(commandlineArguments["separationTimeMs"])):(5);
+    bool skidpadMode = (commandlineArguments["useSkidpadMode"].size() != 0) ? (std::stoi(commandlineArguments["useSkidpadMode"])==1) : (false);
     bool accelerationMode = (commandlineArguments["useAccelerationMode"].size() != 0) ? (std::stoi(commandlineArguments["useAccelerationMode"])==1) : (false);
     int nMessageTypes = (accelerationMode)?(2):(3);
     Collector collector(detectconelane,gatheringTimeMs,separationTimeMs,nMessageTypes);
@@ -106,8 +107,10 @@ int32_t main(int32_t argc, char **argv) {
       // Number of orange cones in frame from detectcone
       od4.dataTrigger(opendlv::logic::perception::Object::ID(),orangeEnvelope);
     }
-    // GPS
-    od4.dataTrigger(opendlv::logic::sensation::Geolocation::ID(),poseEnvelope);
+    if(!skidpadMode){
+      // GPS
+      od4.dataTrigger(opendlv::logic::sensation::Geolocation::ID(),poseEnvelope);
+    }
 
     // Just sleep as this microservice is data driven.
     using namespace std::literals::chrono_literals;
