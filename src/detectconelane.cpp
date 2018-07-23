@@ -276,6 +276,10 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
   Eigen::ArrayXXf location(1,2);
   location << 0,0;
 
+  //NEW!
+  auto addCones = addFirstCones(coneLeft, coneRight);
+  Eigen::ArrayXXf coneLeftNew = std::get<0>(addCones);
+  Eigen::ArrayXXf coneRightNew = std::get<1>(addCones);
   DetectConeLane::generateSurfaces(coneLeft, coneRight, location);
 } // End of sortIntoSideArrays
 
@@ -1024,3 +1028,94 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
   m_newClock = true;
   //std::cout<<"DetectConelane Module Time: "<<dur.count()<<std::endl;
 } // End of sendMatchedContainer
+
+/*std::tuple<Eigen::ArrayXXf, Eigen::ArrayXXf> DetectConeLane::SurfaceMemory(Eigen::ArrayXXf currentSurfaceLong, Eigen::ArrayXXf currentSurfaceShort)
+{
+
+  // update old surfaces based on motion
+  m_SavedSurfacesLong.col(0) - m_motionX;
+  m_SavedSurfacesLong.col(1) - m_motionY;
+  m_SavedSurfacesShort.col(0) - m_motionX;
+  m_SavedSurfacesShort.col(1) - m_motionY;
+  Eigen::ArrayXXf addSurfaceLong=Eigen::ArrayXXf::Zero(m_SavedSurfacesLong.rows(),2);
+  Eigen::ArrayXXf addSurfaceShort=Eigen::ArrayXXf::Zero(m_SavedSurfacesShort.rows(),2);
+  int i=0;
+  int j=0;
+  //While the x3+x4 of old surface is smaller than the x1+x2 of new surface
+  while ((m_SavedSurfacesLong(i+1,0)+m_SavedSurfacesShort(i+1,0))<(currentSurfaceLong(0,0)+currentSurfaceShort(0,0))) {
+    if (((m_SavedSurfacesLong(i+1,0)+m_SavedSurfacesShort(i+1,0))>0.0f) {
+      addSurfaceLong.row(j)=m_SavedSurfacesLong.row(i);
+      addSurfaceShort.row(j)=m_SavedSurfacesShort.row(i);
+      j++;
+    }
+    i++;
+  }
+
+  int nSurfaces = currentSurfaceLong.rows()/2;
+  // if the number of surfaces are high enough, it is considered a good frame.
+  if (nSuraces>=m_goodSurfaceLimit) {
+    //Save surfaces
+    m_SavedSurfacesLong = currentSurfaceLong;
+    m_SavedSurfacesShort = currentSurfaceShort;
+  }
+  return std::make_tuple(addSurfaceLong,addSurfaceShort);
+}*/
+
+std::tuple<Eigen::ArrayXXf, Eigen::ArrayXXf> DetectConeLane::addFirstCones(Eigen::ArrayXXf coneLeft, Eigen::ArrayXXf coneRight);
+{
+  m_firstConeLeft(0)=m_firstConeLeft(0)-m_motionX;
+  m_firstConeLeft(1)=m_firstConeLeft(1)-m_motionY;
+  m_firstConeRight(0)=m_firstConeRight(0)-m_motionX;
+  m_firstConeRight(1)=m_firstConeRight(1)-m_motionY;
+  Eigen::ArrayXXf coneLeftNew;
+  Eigen::ArrayXXf coneRightNew;
+  if (coneLeft.rows()>0) {
+    if (coneLeft(0,0)>1.0f && ((coneLeft.row(0)-m_firstConeLeft).norm()>1.0f)) { //If it is farther than 1m in x to the closest left cone and more than 1m between the cones, add the previous left cone
+      coneLeftNew.resize(coneLeft.rows()+1,2);
+      coneLeftNew.bottomRows(coneLeft.rows())=coneLeft;
+      coneLeftNew.row(0)=m_firstConeLeft;
+    }
+    else{ //else don't use the previous cone and update the previous cone
+      coneLeftNew = coneLeft;
+      m_firstConeLeft = coneLeft.row(0);
+    }
+  }
+  else{ //TODO would this fuck up or would it be sorted out if not useful?
+    coneLeftNew = m_firstConeLeft;
+  }
+
+  if (coneRight.rows()>0) {
+    if (coneRight(0,0)>1.0f && ((coneRight.row(0)-m_firstConeRight).norm()>1.0f)){
+      coneRightNew.resize(coneRight.rows()+1,2);
+      coneRightNew.bottomRows(coneRight.rows())=coneRight;
+      coneRightNew.row(0)=m_firstConeRight;
+    }
+    else{
+      coneRightNew = coneRight;
+      m_firstConeRight = coneRight.row(0);
+    }
+  }
+  else{
+    coneRightNew=m_firstConeRight;
+  }
+  return std::make_tuple(coneLeftNew,coneRightNew);
+}
+std:vector<float> DetectConeLane::GlobalMotion()
+{
+  std::unique_lock<std::mutex> lockPos(m_posMutex);
+  m_motionX=m_globalPos(0)-m_prevGlobalPos(0);
+  m_motiony=m_globalPos(1)-m_prevGlobalPos(1);
+  m_prevGlobalPos = m_globalPos;
+}
+
+
+/*float m_motionX;
+float m_motionY;
+Eigen::ArrayXXf m_SavedSurfacesLong;
+Eigen::ArrayXXf m_SavedSurfacesShort;
+float m_goodSurfaceLimit; commandlineArgument
+Eigen::ArrayXXf m_prevGlobalPos;
+Eigen::Vector2f m_firstConeLeft = (0,1.5);
+Eigen::Vector2f m_firstConeRight =(0,-1.5) ;
+
+*/
