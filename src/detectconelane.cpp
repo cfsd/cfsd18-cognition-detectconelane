@@ -35,6 +35,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_nLapsToGo{(commandlineArguments["nLapsToGo"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nLapsToGo"]))) : (10)}
 , m_lapCounterLockTime{(commandlineArguments["lapCounterLockTime"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["lapCounterLockTime"]))) : (10)}
 , m_latestLapIncrease{std::chrono::system_clock::now()}
+, m_nOrange{0}
 , m_orangeVisibleInLatestFrame{false}
 , m_useNewConeLapCounter{(commandlineArguments["useNewConeLapCounter"].size() != 0) ? (std::stoi(commandlineArguments["useNewConeLapCounter"])==1) : (true)}
 , m_countOrangeFrames{false}
@@ -63,6 +64,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_sampleTime{}
 , m_newClock{true}
 , m_posMutex()
+, m_orangeMutex()
 , m_timeStampMutex()
 , m_sendMutex()
 {
@@ -117,6 +119,15 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
   m_nearFinishInLatestFrame = nearFinishInThisFrame;
 
 } // End of nextPos
+
+
+void DetectConeLane::nextOrange(cluon::data::Envelope data){
+  {  
+    auto oranges = cluon::extractMessage<opendlv::logic::perception::Object>(std::move(data));
+    std::unique_lock<std::mutex> lockOrange(m_orangeMutex);
+    m_nOrange = oranges.objectId();
+  }
+} // End of nextOrange
 
 
 void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame, cluon::data::TimeStamp sampleTime, uint32_t sender){
@@ -248,7 +259,11 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
   } // End of else
 
   //Lap counter for cone detection. 
-  bool orangeVisibleInThisFrame = nBig > 1;
+  bool orangeVisibleInThisFrame;
+  {
+    std::unique_lock<std::mutex> lockOrange(m_orangeMutex);
+    orangeVisibleInThisFrame = m_nOrange > 1;
+  }
 
   if(!m_useNewConeLapCounter){
     // If two big orange cones disappear from view the counter is increased. The finish line position is also updated if possible.

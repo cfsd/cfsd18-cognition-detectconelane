@@ -64,6 +64,15 @@ int32_t main(int32_t argc, char **argv) {
       } 
     };
 
+    auto orangeEnvelope{[&detectconelane, &detectconeStamp, &simDetectconeStamp](cluon::data::Envelope &&envelope)
+      {
+        uint32_t sender = envelope.senderStamp();
+        if(sender == detectconeStamp || sender == simDetectconeStamp){
+          detectconelane.nextOrange(envelope);
+        }
+      } 
+    };
+
     auto pointEnvelope{[&attentionStamp, &simDetectconeStamp, &collector](cluon::data::Envelope &&envelope)
       {
         uint32_t sender = envelope.senderStamp();
@@ -94,6 +103,8 @@ int32_t main(int32_t argc, char **argv) {
       od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),coneEnvelope);
       od4.dataTrigger(opendlv::logic::perception::ObjectDistance::ID(),coneEnvelope);
       od4.dataTrigger(opendlv::logic::perception::ObjectType::ID(),coneEnvelope);
+      // Number of orange cones in frame from detectcone
+      od4.dataTrigger(opendlv::logic::perception::Object::ID(),orangeEnvelope);
     }
     // GPS
     od4.dataTrigger(opendlv::logic::sensation::Geolocation::ID(),poseEnvelope);
