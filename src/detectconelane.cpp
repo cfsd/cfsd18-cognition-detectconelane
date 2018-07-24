@@ -98,7 +98,6 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
   m_globalPos << odometry.longitude(),
                  odometry.latitude();
   m_globalPosReceived = true;
-
   if(!m_finishFound){
     m_finishFound = true;
     m_finishPos = m_globalPos;
@@ -124,7 +123,7 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
 
 
 void DetectConeLane::nextOrange(cluon::data::Envelope data){
-  {  
+  {
     auto oranges = cluon::extractMessage<opendlv::logic::perception::Object>(std::move(data));
     std::unique_lock<std::mutex> lockOrange(m_orangeMutex);
     m_nOrange = oranges.objectId();
@@ -267,7 +266,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
     } // End of for
   } // End of else
 
-  //Lap counter for cone detection. 
+  //Lap counter for cone detection.
   bool orangeVisibleInThisFrame;
   if(m_slamActivated){
     std::unique_lock<std::mutex> lockOrange(m_orangeMutex);
