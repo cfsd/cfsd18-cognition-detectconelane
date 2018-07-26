@@ -409,6 +409,14 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
 
   {
     std::unique_lock<std::mutex> lockSend(m_sendMutex);
+
+    if(m_lapCounter > m_nLapsToGo-1){
+      opendlv::logic::perception::GroundSurfaceProperty surfaceProperty;
+      surfaceProperty.surfaceId(0);
+      surfaceProperty.property("STOP");
+      m_od4.send(surfaceProperty, sampleTimeCopy , m_senderStamp);
+    }
+
     if(longSide.rows() > 1)
     {
       // findSafeLocalPath ends with sending surfaces
@@ -619,23 +627,6 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
     virtualPointsLongFinal.bottomRows(1) = virtualPointsLong.row(nLong-1) + 0.01*lastVecLong;
     virtualPointsShortFinal.bottomRows(1) = virtualPointsShort.row(nShort-1);
   } // End of else
-
-  if(m_lapCounter > m_nLapsToGo-1){
-    int nLong = virtualPointsLongFinal.rows();
-    int nShort = virtualPointsShortFinal.rows();
-
-    Eigen::ArrayXXf virtualPointsLongTmp = virtualPointsLongFinal;
-    Eigen::ArrayXXf virtualPointsShortTmp = virtualPointsShortFinal;
-    virtualPointsLongFinal.resize(nLong+2,2);
-    virtualPointsShortFinal.resize(nShort+2,2);
-
-    virtualPointsLongFinal.topRows(nLong) = virtualPointsLongTmp;
-    virtualPointsShortFinal.topRows(nShort) = virtualPointsShortTmp;
-    virtualPointsLongFinal.bottomRows(2) << 0,0,
-                                            0,0;
-    virtualPointsShortFinal.bottomRows(2) << 0,0,
-                                             0,0;
-  }
 
   DetectConeLane::sendMatchedContainer(virtualPointsLongFinal, virtualPointsShortFinal);
 } // End of findSafeLocalPath
