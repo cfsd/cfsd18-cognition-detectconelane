@@ -171,7 +171,10 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
     else if(theType == 666){ nNone++; }
     else
     {
-      if(!m_accelerationMode){
+      // If we get type 50 in skidpad we are done.
+      if(theType == 50 && m_skidpadMode){
+        m_lapCounter = m_nLapsToGo;
+      }else if(!m_accelerationMode){
         std::cout << "WARNING! Object " << coneIndex << " has invalid cone type: " << theType << std::endl;
       }
       nUnknown++;
@@ -231,11 +234,6 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
     coneRight.resize(b,2);
     coneLeft = coneLeftTmp.topRows(a);
     coneRight = coneRightTmp.topRows(b);
-
-    // If we only see orange cones in skidpad we are done.
-    if(m_skidpadMode){
-      m_lapCounter = m_nLapsToGo;
-    }
   }
   else
   {
