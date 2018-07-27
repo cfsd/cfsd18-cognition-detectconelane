@@ -50,6 +50,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_minGuessSeparation{(commandlineArguments["minGuessSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["minGuessSeparation"]))) : (1.5f)}
 , m_latePerpGuessing{(commandlineArguments["latePerpGuessing"].size() != 0) ? (std::stoi(commandlineArguments["latePerpGuessing"])==1) : (false)}
 , m_maxConeAngle{(commandlineArguments["maxConeAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeAngle"]))) : (1.570796325f)}
+, m_behindMemoryDistance{(commandlineArguments["behindMemoryDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["behindMemoryDistance"]))) : (2.0f)}
 , m_maxConeWidthSeparation{(commandlineArguments["maxConeWidthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeWidthSeparation"]))) : (3.0f)}
 , m_widthSeparationMargin{(commandlineArguments["widthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["widthSeparationMargin"]))) : (1.0f)}
 , m_maxConeLengthSeparation{(commandlineArguments["maxConeLengthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeLengthSeparation"]))) : (5.0f)}
@@ -336,7 +337,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
   } // End of if
 
   Eigen::ArrayXXf location(1,2);
-  location << 0,0;
+  location << -m_behindMemoryDistance,0;
 
   DetectConeLane::generateSurfaces(coneLeft, coneRight, location);
 } // End of sortIntoSideArrays
@@ -797,7 +798,7 @@ Eigen::ArrayXXf DetectConeLane::orderAndFilterCones(Eigen::ArrayXXf cones, Eigen
       if(!((found==j).any()))
       {
         tmpDist = ((current-cones.row(j)).matrix()).norm();
-        if(tmpDist < shortestDist && ( (i>0 && tmpDist < m_maxConeLengthSeparation+m_lengthSeparationMargin) || (i<1 && tmpDist < sqrtf( powf(m_maxConeLengthSeparation+m_lengthSeparationMargin+1.7f,2)+powf(m_maxConeWidthSeparation+m_widthSeparationMargin,2) )) ))
+        if(tmpDist < shortestDist && ( (i>0 && tmpDist < m_maxConeLengthSeparation+m_lengthSeparationMargin) || (i<1 && tmpDist < m_behindMemoryDistance + sqrtf( powf(m_maxConeLengthSeparation+m_lengthSeparationMargin+1.7f,2)+powf(m_maxConeWidthSeparation+m_widthSeparationMargin,2) )) ))
         {
           // If it's one of the first two cones, the nearest neighbour is accepted
           if(i < 2)

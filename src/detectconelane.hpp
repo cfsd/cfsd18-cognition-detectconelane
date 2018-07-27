@@ -85,6 +85,7 @@ class DetectConeLane {
   float m_minGuessSeparation;
   bool m_latePerpGuessing;
   float m_maxConeAngle;
+  float m_behindMemoryDistance;
   float m_maxConeWidthSeparation;
   float m_widthSeparationMargin;
   float m_maxConeLengthSeparation;
