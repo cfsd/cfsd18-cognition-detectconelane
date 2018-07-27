@@ -48,7 +48,7 @@ class DetectConeLane {
   void sortIntoSideArrays(Eigen::ArrayXXf, int, int, int, int, int);
   void generateSurfaces(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf);
   Eigen::ArrayXXf Spherical2Cartesian(float, float, float);
-  void findSafeLocalPath(Eigen::ArrayXXf, Eigen::ArrayXXf);
+  void findSafeLocalPath(Eigen::ArrayXXf, Eigen::ArrayXXf, bool);
   Eigen::ArrayXXf placeEquidistantPoints(Eigen::ArrayXXf, bool, int, float);
   Eigen::ArrayXXf traceBackToClosestPoint(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf);
   Eigen::ArrayXXf orderCones(Eigen::ArrayXXf, Eigen::ArrayXXf);
@@ -84,6 +84,7 @@ class DetectConeLane {
   float m_guessDistance;
   float m_minGuessSeparation;
   bool m_latePerpGuessing;
+  bool m_useCurveDetection;
   float m_maxConeAngle;
   float m_behindMemoryDistance;
   float m_maxConeWidthSeparation;

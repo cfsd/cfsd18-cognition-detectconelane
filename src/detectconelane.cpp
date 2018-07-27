@@ -49,6 +49,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_guessDistance{(commandlineArguments["guessDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["guessDistance"]))) : (3.0f)}
 , m_minGuessSeparation{(commandlineArguments["minGuessSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["minGuessSeparation"]))) : (1.5f)}
 , m_latePerpGuessing{(commandlineArguments["latePerpGuessing"].size() != 0) ? (std::stoi(commandlineArguments["latePerpGuessing"])==1) : (false)}
+, m_useCurveDetection{(commandlineArguments["useCurveDetection"].size() != 0) ? (std::stoi(commandlineArguments["useCurveDetection"])==1) : (true)}
 , m_maxConeAngle{(commandlineArguments["maxConeAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeAngle"]))) : (1.570796325f)}
 , m_behindMemoryDistance{(commandlineArguments["behindMemoryDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["behindMemoryDistance"]))) : (2.0f)}
 , m_maxConeWidthSeparation{(commandlineArguments["maxConeWidthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeWidthSeparation"]))) : (3.0f)}
@@ -421,7 +422,11 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     if(longSide.rows() > 1)
     {
       // findSafeLocalPath ends with sending surfaces
-      DetectConeLane::findSafeLocalPath(longSide, shortSide);
+      if(leftIsLong){
+        DetectConeLane::findSafeLocalPath(longSide, shortSide, leftIsLong);
+      }else{
+        DetectConeLane::findSafeLocalPath(shortSide, longSide, leftIsLong);
+      }
     }
     else
     {
@@ -510,14 +515,12 @@ Eigen::ArrayXXf DetectConeLane::Spherical2Cartesian(float azimuth, float zenimut
 } // End of Spherical2Cartesian
 
 
-void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::ArrayXXf sidePointsRight)
+void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::ArrayXXf sidePointsRight, bool leftIsLong)
 {
   Eigen::ArrayXXf longSide, shortSide;
 
   // Identify the longest side
-  float pathLengthLeft = DetectConeLane::findTotalPathLength(sidePointsLeft);
-  float pathLengthRight = DetectConeLane::findTotalPathLength(sidePointsRight);
-  if(pathLengthLeft > pathLengthRight)
+  if(leftIsLong)
   {
     longSide = sidePointsLeft;
     shortSide = sidePointsRight;
@@ -527,6 +530,34 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
     longSide = sidePointsRight;
     shortSide = sidePointsLeft;
   } // End of else
+
+  if(m_useCurveDetection){
+    // If there are at least three cones in the long side we can see if we are in a left or right turn
+    if(longSide.rows() > 2){
+      // Get point 90 degrees left of the vector between the first two cones (end point of normal vector)
+      Eigen::ArrayXXf normalPoint = DetectConeLane::guessCones(longSide.row(0), longSide.row(1), 1.0f, true, true, false);
+      // If projection of third cone on normal vector is positive it is a left turn
+      float factor = DetectConeLane::findFactorToClosestPoint(longSide.row(0), normalPoint, longSide.row(2));
+      bool leftTurn = factor > 0;
+      if((leftTurn && leftIsLong) || (!leftTurn && !leftIsLong)){
+        // We are currently trusting the inner side, swap them
+        if(leftIsLong)
+        {
+          longSide.resize(sidePointsRight.rows(),sidePointsRight.cols());
+          shortSide.resize(sidePointsLeft.rows(),sidePointsLeft.cols());
+          longSide = sidePointsRight;
+          shortSide = sidePointsLeft;
+        }
+        else
+        {
+          longSide.resize(sidePointsLeft.rows(),sidePointsLeft.cols());
+          shortSide.resize(sidePointsRight.rows(),sidePointsRight.cols());
+          longSide = sidePointsLeft;
+          shortSide = sidePointsRight;
+        } // End of else
+      } // End of if
+    } // End of if
+  } // End of if (curve detection)
 
   int nMidPoints = longSide.rows()*3;
   int nConesShort = shortSide.rows();
