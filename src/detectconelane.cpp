@@ -49,7 +49,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_guessDistance{(commandlineArguments["guessDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["guessDistance"]))) : (3.0f)}
 , m_minGuessSeparation{(commandlineArguments["minGuessSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["minGuessSeparation"]))) : (1.5f)}
 , m_latePerpGuessing{(commandlineArguments["latePerpGuessing"].size() != 0) ? (std::stoi(commandlineArguments["latePerpGuessing"])==1) : (false)}
-, m_useCurveDetection{(commandlineArguments["useCurveDetection"].size() != 0) ? (std::stoi(commandlineArguments["useCurveDetection"])==1) : (true)}
+, m_useCurveDetection{(commandlineArguments["useCurveDetection"].size() != 0) ? (std::stoi(commandlineArguments["useCurveDetection"])==1) : (false)}
 , m_maxConeAngle{(commandlineArguments["maxConeAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeAngle"]))) : (1.570796325f)}
 , m_behindMemoryDistance{(commandlineArguments["behindMemoryDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["behindMemoryDistance"]))) : (2.0f)}
 , m_maxConeWidthSeparation{(commandlineArguments["maxConeWidthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeWidthSeparation"]))) : (3.0f)}
@@ -146,11 +146,13 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
     m_latestLapIncrease = std::chrono::system_clock::now();
   }
 
-  if(!m_slamActivated && sender == m_slamStamp){
+  if(!m_slamActivated && currentFrame.size() > 15 && !m_accelerationMode){
     m_slamActivated = true;
-  }else if(m_slamActivated && sender == m_detectconeStamp){
+  }else if(m_slamActivated && currentFrame.size() <= 15){
     m_slamActivated = false;
   }
+
+if(sender == 12345){std::cout<<"Remove this"<<std::endl;}
 
   int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0, nNone = 0, nUnknown = 0;
   Eigen::ArrayXXf extractedCones(currentFrame.size(),3);
