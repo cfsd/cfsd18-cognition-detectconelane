@@ -23,8 +23,9 @@
 #include <condition_variable>
 #include "detectconelane.hpp"
 
-DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
+DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4, cluon::OD4Session &od4Lap) :
   m_od4(od4)
+, m_od4Lap(od4Lap)
 , m_senderStamp{(commandlineArguments["id"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["id"]))) : (211)}
 , m_detectconeStamp{(commandlineArguments.count("detectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["detectConeId"]))):(118)}
 , m_slamStamp{(commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120)}
@@ -117,6 +118,7 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
     if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
       m_lapCounter++;
       m_latestLapIncrease = std::chrono::system_clock::now();
+      DetectConeLane::sendLapMessage(m_lapCounter);
     }
   }
   m_nearFinishInLatestFrame = nearFinishInThisFrame;
@@ -285,6 +287,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
         if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
           m_lapCounter++;
           m_latestLapIncrease = std::chrono::system_clock::now();
+          DetectConeLane::sendLapMessage(m_lapCounter);
         }
         if(m_globalPosReceived){
           std::unique_lock<std::mutex> lockPos(m_posMutex);
@@ -324,6 +327,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
           if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
             m_lapCounter++;
             m_latestLapIncrease = std::chrono::system_clock::now();
+            DetectConeLane::sendLapMessage(m_lapCounter);
           }
           // The finish line position is updated if possible.
           if(m_globalPosReceived){
@@ -1111,3 +1115,15 @@ void DetectConeLane::sendMatchedContainer(Eigen::ArrayXXf virtualPointsLong, Eig
   m_newClock = true;
   //std::cout<<"DetectConelane Module Time: "<<dur.count()<<std::endl;
 } // End of sendMatchedContainer
+
+void DetectConeLane::sendLapMessage(int lapsCompleted){
+  cluon::data::TimeStamp sampleTimeCopy;
+  {
+    std::unique_lock<std::mutex> lockPos(m_timeStampMutex);
+    sampleTimeCopy = m_sampleTime;
+  }
+
+  opendlv::proxy::SwitchStateReading lapMessage;
+  lapMessage.state(lapsCompleted);
+  m_od4Lap.send(lapMessage, sampleTimeCopy, 666);
+} // End of sendLapMessage

@@ -33,7 +33,7 @@ typedef std::tuple<opendlv::logic::perception::ObjectDirection,opendlv::logic::p
 
 class DetectConeLane {
  public:
-  DetectConeLane(std::map<std::string, std::string>, cluon::OD4Session &od4);
+  DetectConeLane(std::map<std::string, std::string>, cluon::OD4Session &od4, cluon::OD4Session &od4Lap);
   DetectConeLane(DetectConeLane const &) = delete;
   DetectConeLane &operator=(DetectConeLane const &) = delete;
   virtual ~DetectConeLane();
@@ -58,8 +58,10 @@ class DetectConeLane {
   float findTotalPathLength(Eigen::ArrayXXf);
   float findFactorToClosestPoint(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf);
   void sendMatchedContainer(Eigen::ArrayXXf, Eigen::ArrayXXf);
+  void sendLapMessage(int);
 
   cluon::OD4Session &m_od4;
+  cluon::OD4Session &m_od4Lap;
   int m_senderStamp;
   uint32_t m_detectconeStamp;
   uint32_t m_slamStamp;
