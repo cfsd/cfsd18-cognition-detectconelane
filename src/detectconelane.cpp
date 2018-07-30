@@ -135,7 +135,7 @@ void DetectConeLane::nextOrange(cluon::data::Envelope data){
 } // End of nextOrange
 
 
-void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame, cluon::data::TimeStamp sampleTime, uint32_t sender){
+void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame, cluon::data::TimeStamp sampleTime){
 
   m_tick = std::chrono::system_clock::now();
   {
@@ -153,8 +153,6 @@ void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFra
   }else if(m_slamActivated && currentFrame.size() <= 15){
     m_slamActivated = false;
   }
-
-if(sender == 12345){std::cout<<"Remove this"<<std::endl;}
 
   int nLeft = 0, nRight = 0, nSmall = 0, nBig = 0, nNone = 0, nUnknown = 0;
   Eigen::ArrayXXf extractedCones(currentFrame.size(),3);

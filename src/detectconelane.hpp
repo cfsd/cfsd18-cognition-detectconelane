@@ -39,7 +39,7 @@ class DetectConeLane {
   virtual ~DetectConeLane();
   void nextPos(cluon::data::Envelope);
   void nextOrange(cluon::data::Envelope);
-  void receiveCombinedMessage(std::map<int,ConePackage>, cluon::data::TimeStamp, uint32_t);
+  void receiveCombinedMessage(std::map<int,ConePackage>, cluon::data::TimeStamp);
 
  private:
   void setUp();
