@@ -52,6 +52,7 @@ int32_t main(int32_t argc, char **argv) {
     int nMessageTypes = (accelerationMode)?(2):(3);
     Collector collector(detectconelane,gatheringTimeMs,separationTimeMs,nMessageTypes);
     uint32_t detectconeStamp = (commandlineArguments.count("detectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["detectConeId"]))):(118);
+    uint32_t detectconeOrangeStamp = detectconeStamp;
     uint32_t slamStamp = (commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120);
     uint32_t attentionStamp = (commandlineArguments.count("attentionId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["attentionId"]))):(116);
     uint32_t simDetectconeStamp = (commandlineArguments.count("simDetectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["simDetectConeId"]))):(231);
@@ -66,10 +67,10 @@ int32_t main(int32_t argc, char **argv) {
       } 
     };
 
-    auto orangeEnvelope{[&detectconelane, &detectconeStamp, &simDetectconeStamp](cluon::data::Envelope &&envelope)
+    auto orangeEnvelope{[&detectconelane, &detectconeOrangeStamp, &simDetectconeStamp](cluon::data::Envelope &&envelope)
       {
         uint32_t sender = envelope.senderStamp();
-        if(sender == detectconeStamp || sender == simDetectconeStamp){
+        if(sender == detectconeOrangeStamp || sender == simDetectconeStamp){
           detectconelane.nextOrange(envelope);
         }
       } 
