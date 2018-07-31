@@ -351,7 +351,10 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
 void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf sideRight, Eigen::ArrayXXf location){
   Eigen::ArrayXXf orderedConesLeft;
   Eigen::ArrayXXf orderedConesRight;
-  if (!m_slamActivated) {
+  if(m_skidpadMode){
+    orderedConesLeft = sideLeft;
+    orderedConesRight = sideRight;
+  }else if(!m_slamActivated) {
     orderedConesLeft = DetectConeLane::orderAndFilterCones(sideLeft,location);
     orderedConesRight = DetectConeLane::orderAndFilterCones(sideRight,location);
   }else{
