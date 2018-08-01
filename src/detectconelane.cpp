@@ -69,6 +69,10 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_yawRate{0.0}
 , m_groundSpeed{0.0}
 , m_noConesReceived{false}
+, m_usePathMemory{(commandlineArguments["usePathMemory"].size() != 0) ? (std::stoi(commandlineArguments["usePathMemory"])==1) : (false)}
+, m_memoryInitiated{false}
+, m_latestVirtualLong{}
+, m_latestVirtualShort{}
 , m_tick{}
 , m_tock{}
 , m_sampleTime{}
@@ -475,89 +479,115 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
       m_od4.send(surfaceProperty, sampleTimeCopy , m_senderStamp);
     }
 
-    if(longSide.rows() > 1)
-    {
-      // findSafeLocalPath ends with sending surfaces
-      if(leftIsLong){
-        DetectConeLane::findSafeLocalPath(longSide, shortSide, leftIsLong);
-      }else{
-        DetectConeLane::findSafeLocalPath(shortSide, longSide, leftIsLong);
-      }
-    }
-    else
-    {
-      if(longSide.rows() == 0 || m_noConesReceived)
-      { //std::cout<<"No Cones"<<"\n";
-        m_noConesReceived = false;
-        //No cones
-        opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-        surfaceArea.surfaceId(0);
-        surfaceArea.x1(0.0f);
-        surfaceArea.y1(0.0f);
-        surfaceArea.x2(0.0f);
-        surfaceArea.y2(0.0f);
-        surfaceArea.x3(0.0f);
-        surfaceArea.y3(0.0f);
-        surfaceArea.x4(0.0f);
-        surfaceArea.y4(0.0f);
-        m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
-        ////std::cout<<"DetectConeLane send surface: "<<" x1: "<<1<<" y1: "<<0<<" x2: "<<1<<" y2: "<<0<<" x3: "<<0<<" y3: "<<0<<" x4: "<<0<<" y4 "<<0<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
-      }
-      else if(longSide.rows() == 1 && shortSide.rows() == 0)
-      { //std::cout<<"1 Cone"<<"\n";
-        // 1 cone
-        int direction;
-        bool angledAim = false;
+    if(!m_usePathMemory){
+      // The path planner will react to every new frame
+      if(longSide.rows() > 1)
+      {
+        // findSafeLocalPath ends with sending surfaces
         if(leftIsLong){
-          direction = -1;
-          angledAim = longSide(0,1) < 0;
+          DetectConeLane::findSafeLocalPath(longSide, shortSide, leftIsLong);
         }else{
-          direction = 1;
-          angledAim = longSide(0,1) > 0;
+          DetectConeLane::findSafeLocalPath(shortSide, longSide, leftIsLong);
         }
-
-        // If the cone is one the wrong side, aim 90 degrees to the side of it. Otherwise aim towards same x but different y.
-        Eigen::ArrayXXf aimpoint(1,2);
-        if(angledAim){
-          // Finding a point 90 degrees to the side is the same operation as in guessCones.
-          aimpoint = DetectConeLane::guessCones(location, longSide.row(0), m_guessDistance/2, !leftIsLong, false, true);
-        }else{
-          aimpoint << longSide(0,0),longSide(0,1)+direction*m_guessDistance/2;
-        }
-
-        opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-        surfaceArea.surfaceId(0);
-        surfaceArea.x1(0.0f);
-        surfaceArea.y1(0.0f);
-        surfaceArea.x2(0.0f);
-        surfaceArea.y2(0.0f);
-        surfaceArea.x3(aimpoint(0,0));
-        surfaceArea.y3(aimpoint(0,1));
-        surfaceArea.x4(aimpoint(0,0));
-        surfaceArea.y4(aimpoint(0,1));
-        m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
-        /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)+1.5f*direction<<" x4: "<<longSide(0,0)<<" y4 "<<longSide(0,1)+1.5f*direction<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
-        */
       }
       else
-      { //std::cout<<"1 on each side"<<"\n";
-        //1 on each side
-        opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-        surfaceArea.x1(longSide(0,0));
-        surfaceArea.y1(longSide(0,1));
-        surfaceArea.x2(shortSide(0,0));
-        surfaceArea.y2(shortSide(0,1));
-        surfaceArea.x3(0.0f);
-        surfaceArea.y3(0.0f);
-        surfaceArea.x4(0.0f);
-        surfaceArea.y4(0.0f);
-        m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
-        /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)<<" x4: "<<shortSide(0,0)<<" y4 "<<shortSide(0,1)<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
-        */
+      {
+        if(longSide.rows() == 0 || m_noConesReceived)
+        { //std::cout<<"No Cones"<<"\n";
+          m_noConesReceived = false;
+          //No cones
+          opendlv::logic::perception::GroundSurfaceArea surfaceArea;
+          surfaceArea.surfaceId(0);
+          surfaceArea.x1(0.0f);
+          surfaceArea.y1(0.0f);
+          surfaceArea.x2(0.0f);
+          surfaceArea.y2(0.0f);
+          surfaceArea.x3(0.0f);
+          surfaceArea.y3(0.0f);
+          surfaceArea.x4(0.0f);
+          surfaceArea.y4(0.0f);
+          m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
+          ////std::cout<<"DetectConeLane send surface: "<<" x1: "<<1<<" y1: "<<0<<" x2: "<<1<<" y2: "<<0<<" x3: "<<0<<" y3: "<<0<<" x4: "<<0<<" y4 "<<0<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
+        }
+        else if(longSide.rows() == 1 && shortSide.rows() == 0)
+        { //std::cout<<"1 Cone"<<"\n";
+          // 1 cone
+          int direction;
+          bool angledAim = false;
+          if(leftIsLong){
+            direction = -1;
+            angledAim = longSide(0,1) < 0;
+          }else{
+            direction = 1;
+            angledAim = longSide(0,1) > 0;
+          }
 
+          // If the cone is one the wrong side, aim 90 degrees to the side of it. Otherwise aim towards same x but different y.
+          Eigen::ArrayXXf aimpoint(1,2);
+          if(angledAim){
+            // Finding a point 90 degrees to the side is the same operation as in guessCones.
+            aimpoint = DetectConeLane::guessCones(location, longSide.row(0), m_guessDistance/2, !leftIsLong, false, true);
+          }else{
+            aimpoint << longSide(0,0),longSide(0,1)+direction*m_guessDistance/2;
+          }
+
+          opendlv::logic::perception::GroundSurfaceArea surfaceArea;
+          surfaceArea.surfaceId(0);
+          surfaceArea.x1(0.0f);
+          surfaceArea.y1(0.0f);
+          surfaceArea.x2(0.0f);
+          surfaceArea.y2(0.0f);
+          surfaceArea.x3(aimpoint(0,0));
+          surfaceArea.y3(aimpoint(0,1));
+          surfaceArea.x4(aimpoint(0,0));
+          surfaceArea.y4(aimpoint(0,1));
+          m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
+          /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)+1.5f*direction<<" x4: "<<longSide(0,0)<<" y4 "<<longSide(0,1)+1.5f*direction<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
+          */
+        }
+        else
+        { //std::cout<<"1 on each side"<<"\n";
+          //1 on each side
+          opendlv::logic::perception::GroundSurfaceArea surfaceArea;
+          surfaceArea.x1(longSide(0,0));
+          surfaceArea.y1(longSide(0,1));
+          surfaceArea.x2(shortSide(0,0));
+          surfaceArea.y2(shortSide(0,1));
+          surfaceArea.x3(0.0f);
+          surfaceArea.y3(0.0f);
+          surfaceArea.x4(0.0f);
+          surfaceArea.y4(0.0f);
+          m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
+          /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)<<" x4: "<<shortSide(0,0)<<" y4 "<<shortSide(0,1)<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
+          */
+
+        }
+      } // End of special cases
+    }
+    else // Use path memory
+    {
+      if(longSide.rows() > 1 && !m_memoryInitiated)
+      {
+        // findSafeLocalPath ends with storing the path in m_latestVirtualLong and m_latestVirtualShort
+        if(leftIsLong){
+          DetectConeLane::findSafeLocalPath(longSide, shortSide, leftIsLong);
+        }else{
+          DetectConeLane::findSafeLocalPath(shortSide, longSide, leftIsLong);
+        }
+        m_memoryInitiated = true;
       }
-    } //end send mutex
-  } // End of else
+
+      if(m_memoryInitiated){
+        Eigen::ArrayXXf newVirtualLong = DetectConeLane::movePath(m_latestVirtualLong);
+        Eigen::ArrayXXf newVirtualShort = DetectConeLane::movePath(m_latestVirtualShort);
+        DetectConeLane::sendMatchedContainer(newVirtualLong, newVirtualShort);
+
+        m_latestVirtualLong = newVirtualLong;
+        m_latestVirtualShort = newVirtualShort;
+      }
+
+    } // End of usePathMemory
+  } // End of send mutex
 } // End of generateSurfaces
 
 
@@ -716,7 +746,12 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
     virtualPointsShortFinal.bottomRows(1) = virtualPointsShort.row(nShort-1);
   } // End of else
 
-  DetectConeLane::sendMatchedContainer(virtualPointsLongFinal, virtualPointsShortFinal);
+  if(m_usePathMemory){
+    m_latestVirtualLong = virtualPointsLongFinal;
+    m_latestVirtualShort = virtualPointsShortFinal;
+  }else{
+    DetectConeLane::sendMatchedContainer(virtualPointsLongFinal, virtualPointsShortFinal);
+  }
 } // End of findSafeLocalPath
 
 
