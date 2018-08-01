@@ -22,6 +22,7 @@
 #include <mutex>
 #include <condition_variable>
 #include "detectconelane.hpp"
+#include "WGS84toCartesian.hpp" 
 
 DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4, cluon::OD4Session &od4Lap) :
   m_od4(od4)
@@ -38,6 +39,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_nLapsToGo{(commandlineArguments["nLapsToGo"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nLapsToGo"]))) : (10)}
 , m_lapCounterLockTime{(commandlineArguments["lapCounterLockTime"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["lapCounterLockTime"]))) : (10)}
 , m_latestLapIncrease{std::chrono::system_clock::now()}
+, m_useOrangeLapCounter{(commandlineArguments["useOrangeLapCounter"].size() != 0) ? (std::stoi(commandlineArguments["useOrangeLapCounter"])==1) : (true)}
 , m_nOrange{0}
 , m_orangeVisibleInLatestFrame{false}
 , m_useNewConeLapCounter{(commandlineArguments["useNewConeLapCounter"].size() != 0) ? (std::stoi(commandlineArguments["useNewConeLapCounter"])==1) : (true)}
@@ -57,19 +59,34 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_widthSeparationMargin{(commandlineArguments["widthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["widthSeparationMargin"]))) : (1.0f)}
 , m_maxConeLengthSeparation{(commandlineArguments["maxConeLengthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeLengthSeparation"]))) : (5.0f)}
 , m_lengthSeparationMargin{(commandlineArguments["lengthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["lengthSeparationMargin"]))) : (1.0f)}
+, m_useRawGPS{(commandlineArguments["useRawGPS"].size() != 0) ? (std::stoi(commandlineArguments["useRawGPS"])==1) : (false)}
+, m_gpsReference()
+, m_useGpsLapCounter{(commandlineArguments["useGpsLapCounter"].size() != 0) ? (std::stoi(commandlineArguments["useGpsLapCounter"])==1) : (true)}
 , m_globalPos()
 , m_finishFound{false}
 , m_finishPos{}
 , m_finishRadius{}
 , m_nearFinishInLatestFrame{false}
 , m_globalPosReceived{false}
+, m_yawRate{0.0}
+, m_groundSpeed{0.0}
 , m_noConesReceived{false}
+, m_usePathMemory{(commandlineArguments["usePathMemory"].size() != 0) ? (std::stoi(commandlineArguments["usePathMemory"])==1) : (false)}
+, m_memoryInitiated{false}
+, m_latestSet{false}
+, m_candidateVirtualLong{}
+, m_candidateVirtualShort{}
+, m_latestVirtualLong{}
+, m_latestVirtualShort{}
 , m_tick{}
 , m_tock{}
 , m_sampleTime{}
+, m_previousTimeStamp{}
 , m_newClock{true}
 , m_posMutex()
 , m_orangeMutex()
+, m_yawMutex()
+, m_speedMutex()
 , m_timeStampMutex()
 , m_sendMutex()
 {
@@ -77,6 +94,10 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
   for (std::map<std::string, std::string >::iterator it = commandlineArguments.begin();it !=commandlineArguments.end();it++){
     std::cout<<it->first<<" "<<it->second<<std::endl;
   }*/
+
+  // Default gps reference is set to the docks near Revere 
+  m_gpsReference[0] = (commandlineArguments["refLatitude"].size() != 0) ? (static_cast<double>(std::stod(commandlineArguments["refLatitude"]))):(57.710482);
+  m_gpsReference[1] = (commandlineArguments["refLongitude"].size() != 0) ? static_cast<double>(std::stod(commandlineArguments["refLongitude"])):(11.950813);
 }
 
 DetectConeLane::~DetectConeLane()
@@ -98,16 +119,34 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
   std::unique_lock<std::mutex> lockPos(m_posMutex);
   auto odometry = cluon::extractMessage<opendlv::logic::sensation::Geolocation>(std::move(data));
 
-  m_globalPos << odometry.longitude(),
-                 odometry.latitude();
-  m_globalPosReceived = true;
-  if(!m_finishFound){
-    m_finishFound = true;
-    m_finishPos = m_globalPos;
-    if(m_accelerationMode){
-      m_finishRadius = 75.0;
-    }else{
-      m_finishRadius = 6.0;
+  if(m_useRawGPS){
+    // If we listen to raw GPS data we need to convert to cartesian
+    double longitude = odometry.longitude();
+    double latitude = odometry.latitude();
+
+    std::array<double,2> WGS84ReadingTemp;
+    WGS84ReadingTemp[0] = latitude;
+    WGS84ReadingTemp[1] = longitude;
+
+    std::array<double,2> WGS84Reading = wgs84::toCartesian(m_gpsReference, WGS84ReadingTemp);
+    m_globalPos << WGS84Reading[0],
+                   WGS84Reading[1];
+  }else{
+    // Otherwise we listen to UKF where they are already converted
+    m_globalPos << odometry.longitude(),
+                   odometry.latitude();
+  }
+
+  if(m_globalPos(0) > 0 && m_globalPos(1) > 0){
+    m_globalPosReceived = true;
+    if(!m_finishFound){
+      m_finishFound = true;
+      m_finishPos = m_globalPos;
+      if(m_accelerationMode){
+        m_finishRadius = 75.0;
+      }else{
+        m_finishRadius = 6.0;
+      }
     }
   }
 
@@ -115,7 +154,7 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
   bool nearFinishInThisFrame = (m_finishPos - m_globalPos).norm() < m_finishRadius;
   if(!nearFinishInThisFrame && m_nearFinishInLatestFrame){
     std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
-    if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
+    if(m_useGpsLapCounter && timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
       m_lapCounter++;
       m_latestLapIncrease = std::chrono::system_clock::now();
       DetectConeLane::sendLapMessage(m_lapCounter);
@@ -135,11 +174,30 @@ void DetectConeLane::nextOrange(cluon::data::Envelope data){
 } // End of nextOrange
 
 
+void DetectConeLane::nextYawRate(cluon::data::Envelope data){
+  std::lock_guard<std::mutex> lockYaw(m_yawMutex);
+  auto yawRate = cluon::extractMessage<opendlv::proxy::AngularVelocityReading>(std::move(data));
+  m_yawRate = yawRate.angularVelocityZ();
+} // End of nextYawRate
+
+
+void DetectConeLane::nextGroundSpeed(cluon::data::Envelope data){
+  std::lock_guard<std::mutex> lockGroundSpeed(m_speedMutex);
+  auto groundSpeed = cluon::extractMessage<opendlv::proxy::GroundSpeedReading>(std::move(data));
+  m_groundSpeed = groundSpeed.groundSpeed();
+} // End of nextGroundSpeed
+
+
 void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame, cluon::data::TimeStamp sampleTime){
 
   m_tick = std::chrono::system_clock::now();
   {
     std::unique_lock<std::mutex> lockPos(m_timeStampMutex);
+    if(m_isRunning){
+      m_previousTimeStamp = m_sampleTime;
+    }else{
+      m_previousTimeStamp = sampleTime;
+    }
     m_sampleTime = sampleTime;
   }
 
@@ -282,7 +340,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
       // If two big orange cones disappear from view the counter is increased. The finish line position is also updated if possible.
       if(!orangeVisibleInThisFrame && m_orangeVisibleInLatestFrame){
         std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
-        if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
+        if(m_useOrangeLapCounter && timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
           m_lapCounter++;
           m_latestLapIncrease = std::chrono::system_clock::now();
           DetectConeLane::sendLapMessage(m_lapCounter);
@@ -322,7 +380,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
           m_disappearanceFramesInARow = 0;
           m_countDisappearanceFrames = false;
           std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
-          if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
+          if(m_useOrangeLapCounter && timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
             m_lapCounter++;
             m_latestLapIncrease = std::chrono::system_clock::now();
             DetectConeLane::sendLapMessage(m_lapCounter);
@@ -351,7 +409,10 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
 void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf sideRight, Eigen::ArrayXXf location){
   Eigen::ArrayXXf orderedConesLeft;
   Eigen::ArrayXXf orderedConesRight;
-  if (!m_slamActivated) {
+  if(m_skidpadMode){
+    orderedConesLeft = sideLeft;
+    orderedConesRight = sideRight;
+  }else if(!m_slamActivated) {
     orderedConesLeft = DetectConeLane::orderAndFilterCones(sideLeft,location);
     orderedConesRight = DetectConeLane::orderAndFilterCones(sideRight,location);
   }else{
@@ -423,89 +484,161 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
       m_od4.send(surfaceProperty, sampleTimeCopy , m_senderStamp);
     }
 
-    if(longSide.rows() > 1)
-    {
-      // findSafeLocalPath ends with sending surfaces
-      if(leftIsLong){
-        DetectConeLane::findSafeLocalPath(longSide, shortSide, leftIsLong);
-      }else{
-        DetectConeLane::findSafeLocalPath(shortSide, longSide, leftIsLong);
-      }
-    }
-    else
-    {
-      if(longSide.rows() == 0 || m_noConesReceived)
-      { //std::cout<<"No Cones"<<"\n";
-        m_noConesReceived = false;
-        //No cones
-        opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-        surfaceArea.surfaceId(0);
-        surfaceArea.x1(0.0f);
-        surfaceArea.y1(0.0f);
-        surfaceArea.x2(0.0f);
-        surfaceArea.y2(0.0f);
-        surfaceArea.x3(0.0f);
-        surfaceArea.y3(0.0f);
-        surfaceArea.x4(0.0f);
-        surfaceArea.y4(0.0f);
-        m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
-        ////std::cout<<"DetectConeLane send surface: "<<" x1: "<<1<<" y1: "<<0<<" x2: "<<1<<" y2: "<<0<<" x3: "<<0<<" y3: "<<0<<" x4: "<<0<<" y4 "<<0<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
-      }
-      else if(longSide.rows() == 1 && shortSide.rows() == 0)
-      { //std::cout<<"1 Cone"<<"\n";
-        // 1 cone
-        int direction;
-        bool angledAim = false;
+    if(!m_usePathMemory){
+      // The path planner will react to every new frame
+      if(longSide.rows() > 1)
+      {
+        // findSafeLocalPath ends with sending surfaces
         if(leftIsLong){
-          direction = -1;
-          angledAim = longSide(0,1) < 0;
+          DetectConeLane::findSafeLocalPath(longSide, shortSide, leftIsLong);
         }else{
-          direction = 1;
-          angledAim = longSide(0,1) > 0;
+          DetectConeLane::findSafeLocalPath(shortSide, longSide, leftIsLong);
         }
-
-        // If the cone is one the wrong side, aim 90 degrees to the side of it. Otherwise aim towards same x but different y.
-        Eigen::ArrayXXf aimpoint(1,2);
-        if(angledAim){
-          // Finding a point 90 degrees to the side is the same operation as in guessCones.
-          aimpoint = DetectConeLane::guessCones(location, longSide.row(0), m_guessDistance/2, !leftIsLong, false, true);
-        }else{
-          aimpoint << longSide(0,0),longSide(0,1)+direction*m_guessDistance/2;
-        }
-
-        opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-        surfaceArea.surfaceId(0);
-        surfaceArea.x1(0.0f);
-        surfaceArea.y1(0.0f);
-        surfaceArea.x2(0.0f);
-        surfaceArea.y2(0.0f);
-        surfaceArea.x3(aimpoint(0,0));
-        surfaceArea.y3(aimpoint(0,1));
-        surfaceArea.x4(aimpoint(0,0));
-        surfaceArea.y4(aimpoint(0,1));
-        m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
-        /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)+1.5f*direction<<" x4: "<<longSide(0,0)<<" y4 "<<longSide(0,1)+1.5f*direction<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
-        */
       }
       else
-      { //std::cout<<"1 on each side"<<"\n";
-        //1 on each side
-        opendlv::logic::perception::GroundSurfaceArea surfaceArea;
-        surfaceArea.x1(longSide(0,0));
-        surfaceArea.y1(longSide(0,1));
-        surfaceArea.x2(shortSide(0,0));
-        surfaceArea.y2(shortSide(0,1));
-        surfaceArea.x3(0.0f);
-        surfaceArea.y3(0.0f);
-        surfaceArea.x4(0.0f);
-        surfaceArea.y4(0.0f);
-        m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
-        /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)<<" x4: "<<shortSide(0,0)<<" y4 "<<shortSide(0,1)<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
-        */
+      {
+        if(longSide.rows() == 0 || m_noConesReceived)
+        { //std::cout<<"No Cones"<<"\n";
+          m_noConesReceived = false;
+          //No cones
+          opendlv::logic::perception::GroundSurfaceArea surfaceArea;
+          surfaceArea.surfaceId(0);
+          surfaceArea.x1(0.0f);
+          surfaceArea.y1(0.0f);
+          surfaceArea.x2(0.0f);
+          surfaceArea.y2(0.0f);
+          surfaceArea.x3(0.0f);
+          surfaceArea.y3(0.0f);
+          surfaceArea.x4(0.0f);
+          surfaceArea.y4(0.0f);
+          m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
+          ////std::cout<<"DetectConeLane send surface: "<<" x1: "<<1<<" y1: "<<0<<" x2: "<<1<<" y2: "<<0<<" x3: "<<0<<" y3: "<<0<<" x4: "<<0<<" y4 "<<0<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<" senderStamp "<<m_senderStamp<<std::endl;
+        }
+        else if(longSide.rows() == 1 && shortSide.rows() == 0)
+        { //std::cout<<"1 Cone"<<"\n";
+          // 1 cone
+          int direction;
+          bool angledAim = false;
+          if(leftIsLong){
+            direction = -1;
+            angledAim = longSide(0,1) < 0;
+          }else{
+            direction = 1;
+            angledAim = longSide(0,1) > 0;
+          }
 
+          // If the cone is one the wrong side, aim 90 degrees to the side of it. Otherwise aim towards same x but different y.
+          Eigen::ArrayXXf aimpoint(1,2);
+          if(angledAim){
+            // Finding a point 90 degrees to the side is the same operation as in guessCones.
+            aimpoint = DetectConeLane::guessCones(location, longSide.row(0), m_guessDistance/2, !leftIsLong, false, true);
+          }else{
+            aimpoint << longSide(0,0),longSide(0,1)+direction*m_guessDistance/2;
+          }
+
+          opendlv::logic::perception::GroundSurfaceArea surfaceArea;
+          surfaceArea.surfaceId(0);
+          surfaceArea.x1(0.0f);
+          surfaceArea.y1(0.0f);
+          surfaceArea.x2(0.0f);
+          surfaceArea.y2(0.0f);
+          surfaceArea.x3(aimpoint(0,0));
+          surfaceArea.y3(aimpoint(0,1));
+          surfaceArea.x4(aimpoint(0,0));
+          surfaceArea.y4(aimpoint(0,1));
+          m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
+          /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)+1.5f*direction<<" x4: "<<longSide(0,0)<<" y4 "<<longSide(0,1)+1.5f*direction<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
+          */
+        }
+        else
+        { //std::cout<<"1 on each side"<<"\n";
+          //1 on each side
+          opendlv::logic::perception::GroundSurfaceArea surfaceArea;
+          surfaceArea.x1(longSide(0,0));
+          surfaceArea.y1(longSide(0,1));
+          surfaceArea.x2(shortSide(0,0));
+          surfaceArea.y2(shortSide(0,1));
+          surfaceArea.x3(0.0f);
+          surfaceArea.y3(0.0f);
+          surfaceArea.x4(0.0f);
+          surfaceArea.y4(0.0f);
+          m_od4.send(surfaceArea, sampleTimeCopy , m_senderStamp);
+          /*std::cout<<"DetectConeLane send surface: "<<" x1: "<<0<<" y1: "<<0<<" x2: "<<0<<" y2: "<<0<<" x3: "<<longSide(0,0)<<" y3: "<<longSide(0,1)<<" x4: "<<shortSide(0,0)<<" y4 "<<shortSide(0,1)<<" frame ID: "<<0<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime);
+          */
+
+        }
+      } // End of special cases
+    }
+    else // Use path memory
+    {
+      if(longSide.rows() > 1 && !m_memoryInitiated){
+        m_memoryInitiated = true;
       }
-    } //end send mutex
-  } // End of else
+
+      if(m_memoryInitiated){
+
+        if(longSide.rows() > 1){ // Path can be updated
+          // findSafeLocalPath ends with storing the path in m_candidateVirtualLong and m_candidateVirtualShort
+          if(leftIsLong){
+            DetectConeLane::findSafeLocalPath(longSide, shortSide, leftIsLong);
+          }else{
+            DetectConeLane::findSafeLocalPath(shortSide, longSide, leftIsLong);
+          }
+
+          if(!m_latestSet){
+            m_latestVirtualLong = m_candidateVirtualLong;
+            m_latestVirtualShort = m_candidateVirtualShort;
+            m_latestSet = true;
+          }
+
+          float angleOldLong = atan2f(m_latestVirtualLong(m_latestVirtualLong.rows()-1,1)-m_latestVirtualLong(0,1),m_latestVirtualLong(m_latestVirtualLong.rows()-1,0)-m_latestVirtualLong(0,0));
+          float angleNewLong = atan2f(m_candidateVirtualLong(m_candidateVirtualLong.rows()-1,1)-m_candidateVirtualLong(0,1),m_candidateVirtualLong(m_candidateVirtualLong.rows()-1,0)-m_candidateVirtualLong(0,0));
+          float angleDiffLong = static_cast<float>(fabs(angleOldLong-angleNewLong));
+
+          float angleOldShort = atan2f(m_latestVirtualShort(m_latestVirtualShort.rows()-1,1)-m_latestVirtualShort(0,1),m_latestVirtualShort(m_latestVirtualShort.rows()-1,0)-m_latestVirtualShort(0,0));
+          float angleNewShort = atan2f(m_candidateVirtualShort(m_candidateVirtualShort.rows()-1,1)-m_candidateVirtualShort(0,1),m_candidateVirtualShort(m_candidateVirtualShort.rows()-1,0)-m_candidateVirtualShort(0,0));
+          float angleDiffShort = static_cast<float>(fabs(angleOldShort-angleNewShort));
+
+          if(angleDiffLong < 5.0f*static_cast<float>(DEG2RAD) && angleDiffShort < 5.0f*static_cast<float>(DEG2RAD)){ // Less than 5 degrees difference, accepted
+
+            m_latestVirtualLong.resize(m_candidateVirtualLong.rows(),m_candidateVirtualLong.cols());
+            m_latestVirtualShort.resize(m_candidateVirtualShort.rows(),m_candidateVirtualShort.cols());
+            m_latestVirtualLong = m_candidateVirtualLong;
+            m_latestVirtualShort = m_candidateVirtualShort;
+
+            // Having a doubled first point is the signal to the next module that the path has been updated.
+            Eigen::ArrayXXf tmpVirtualLong(m_latestVirtualLong.rows()+1, m_latestVirtualLong.cols());
+            Eigen::ArrayXXf tmpVirtualShort(m_latestVirtualShort.rows()+1, m_latestVirtualShort.cols());
+
+            tmpVirtualLong.bottomRows(m_latestVirtualLong.rows()) = m_latestVirtualLong;
+            tmpVirtualShort.bottomRows(m_latestVirtualShort.rows()) = m_latestVirtualShort;
+            tmpVirtualLong.row(0) = tmpVirtualLong.row(1);
+            tmpVirtualShort.row(0) = tmpVirtualShort.row(1);
+
+            DetectConeLane::sendMatchedContainer(tmpVirtualLong, tmpVirtualShort);
+
+          }else{ // Angle difference too large, use memory instead
+            Eigen::ArrayXXf newVirtualLong = DetectConeLane::movePath(m_latestVirtualLong);
+            Eigen::ArrayXXf newVirtualShort = DetectConeLane::movePath(m_latestVirtualShort);
+            DetectConeLane::sendMatchedContainer(newVirtualLong, newVirtualShort);
+
+            m_latestVirtualLong = newVirtualLong;
+            m_latestVirtualShort = newVirtualShort;
+          }
+
+        }else{ // Path cannot be updated, use memory instead
+
+          Eigen::ArrayXXf newVirtualLong = DetectConeLane::movePath(m_latestVirtualLong);
+          Eigen::ArrayXXf newVirtualShort = DetectConeLane::movePath(m_latestVirtualShort);
+          DetectConeLane::sendMatchedContainer(newVirtualLong, newVirtualShort);
+
+          m_latestVirtualLong = newVirtualLong;
+          m_latestVirtualShort = newVirtualShort;
+        }
+      } // End of memory initiated
+
+    } // End of usePathMemory
+  } // End of send mutex
 } // End of generateSurfaces
 
 
@@ -664,7 +797,12 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
     virtualPointsShortFinal.bottomRows(1) = virtualPointsShort.row(nShort-1);
   } // End of else
 
-  DetectConeLane::sendMatchedContainer(virtualPointsLongFinal, virtualPointsShortFinal);
+  if(m_usePathMemory){
+    m_candidateVirtualLong = virtualPointsLongFinal;
+    m_candidateVirtualShort = virtualPointsShortFinal;
+  }else{
+    DetectConeLane::sendMatchedContainer(virtualPointsLongFinal, virtualPointsShortFinal);
+  }
 } // End of findSafeLocalPath
 
 
@@ -1125,3 +1263,35 @@ void DetectConeLane::sendLapMessage(int lapsCompleted){
   lapMessage.state(lapsCompleted);
   m_od4Lap.send(lapMessage, sampleTimeCopy, 666);
 } // End of sendLapMessage
+
+
+Eigen::ArrayXXf DetectConeLane::movePath(Eigen::ArrayXXf latestPath){
+  double delta;
+  double rotation;
+  double speed;
+  {
+    std::unique_lock<std::mutex> lockPos(m_timeStampMutex);
+    delta = cluon::time::deltaInMicroseconds(m_sampleTime,m_previousTimeStamp)/1000000.0;
+  }
+  {
+  std::lock_guard<std::mutex> lockYaw(m_yawMutex);
+  rotation = m_yawRate*delta;
+  }
+  {
+  std::lock_guard<std::mutex> lockGroundSpeed(m_speedMutex);
+  speed = m_groundSpeed*delta;
+  }
+  Eigen::ArrayXXf nextPath = latestPath;
+  if(fabs(speed)>0.001 && fabs(rotation)>0.00001){
+    for(int i = 0 ; i < nextPath.rows() ; i++){
+      double x = latestPath(i,0);
+      double y = latestPath(i,1);
+      double newX = x*cos(-rotation)-y*sin(-rotation);
+      double newY = y*cos(-rotation)+x*sin(-rotation);
+      newX = newX-speed;
+      nextPath(i,0) = static_cast<float>(newX);
+      nextPath(i,1) = static_cast<float>(newY);
+    }
+  }
+  return nextPath;
+} // End of movePath
