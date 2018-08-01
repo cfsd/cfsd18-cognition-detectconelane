@@ -73,6 +73,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_noConesReceived{false}
 , m_usePathMemory{(commandlineArguments["usePathMemory"].size() != 0) ? (std::stoi(commandlineArguments["usePathMemory"])==1) : (false)}
 , m_memoryInitiated{false}
+, m_latestSet{false}
 , m_candidateVirtualLong{}
 , m_candidateVirtualShort{}
 , m_latestVirtualLong{}
@@ -584,11 +585,21 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
             DetectConeLane::findSafeLocalPath(shortSide, longSide, leftIsLong);
           }
 
-          float angleOld = atan2f(m_latestVirtualLong(m_latestVirtualLong.rows()-1,1)-m_latestVirtualLong(0,1),m_latestVirtualLong(m_latestVirtualLong.rows()-1,0)-m_latestVirtualLong(0,0));
-          float angleNew = atan2f(m_candidateVirtualLong(m_candidateVirtualLong.rows()-1,1)-m_candidateVirtualLong(0,1),m_candidateVirtualLong(m_candidateVirtualLong.rows()-1,0)-m_candidateVirtualLong(0,0));
-          float angleDiff = abs(angleOld-angleNew);
+          if(!m_latestSet){
+            m_latestVirtualLong = m_candidateVirtualLong;
+            m_latestVirtualShort = m_candidateVirtualShort;
+            m_latestSet = true;
+          }
 
-          if(angleDiff < 5*DEG2RAD){ // Less than 5 degrees difference, accepted
+          float angleOldLong = atan2f(m_latestVirtualLong(m_latestVirtualLong.rows()-1,1)-m_latestVirtualLong(0,1),m_latestVirtualLong(m_latestVirtualLong.rows()-1,0)-m_latestVirtualLong(0,0));
+          float angleNewLong = atan2f(m_candidateVirtualLong(m_candidateVirtualLong.rows()-1,1)-m_candidateVirtualLong(0,1),m_candidateVirtualLong(m_candidateVirtualLong.rows()-1,0)-m_candidateVirtualLong(0,0));
+          float angleDiffLong = static_cast<float>(fabs(angleOldLong-angleNewLong));
+
+          float angleOldShort = atan2f(m_latestVirtualShort(m_latestVirtualShort.rows()-1,1)-m_latestVirtualShort(0,1),m_latestVirtualShort(m_latestVirtualShort.rows()-1,0)-m_latestVirtualShort(0,0));
+          float angleNewShort = atan2f(m_candidateVirtualShort(m_candidateVirtualShort.rows()-1,1)-m_candidateVirtualShort(0,1),m_candidateVirtualShort(m_candidateVirtualShort.rows()-1,0)-m_candidateVirtualShort(0,0));
+          float angleDiffShort = static_cast<float>(fabs(angleOldShort-angleNewShort));
+
+          if(angleDiffLong < 5.0f*static_cast<float>(DEG2RAD) && angleDiffShort < 5.0f*static_cast<float>(DEG2RAD)){ // Less than 5 degrees difference, accepted
 
             m_latestVirtualLong.resize(m_candidateVirtualLong.rows(),m_candidateVirtualLong.cols());
             m_latestVirtualShort.resize(m_candidateVirtualShort.rows(),m_candidateVirtualShort.cols());

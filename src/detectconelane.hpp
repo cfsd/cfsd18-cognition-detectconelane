@@ -111,6 +111,7 @@ class DetectConeLane {
   bool m_noConesReceived;
   bool m_usePathMemory;
   bool m_memoryInitiated;
+  bool m_latestSet;
   Eigen::ArrayXXf m_candidateVirtualLong;
   Eigen::ArrayXXf m_candidateVirtualShort;
   Eigen::ArrayXXf m_latestVirtualLong;
