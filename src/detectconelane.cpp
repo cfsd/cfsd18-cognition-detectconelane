@@ -73,6 +73,8 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_noConesReceived{false}
 , m_usePathMemory{(commandlineArguments["usePathMemory"].size() != 0) ? (std::stoi(commandlineArguments["usePathMemory"])==1) : (false)}
 , m_memoryInitiated{false}
+, m_candidateVirtualLong{}
+, m_candidateVirtualShort{}
 , m_latestVirtualLong{}
 , m_latestVirtualShort{}
 , m_tick{}
@@ -568,25 +570,61 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     }
     else // Use path memory
     {
-      if(longSide.rows() > 1 && !m_memoryInitiated)
-      {
-        // findSafeLocalPath ends with storing the path in m_latestVirtualLong and m_latestVirtualShort
-        if(leftIsLong){
-          DetectConeLane::findSafeLocalPath(longSide, shortSide, leftIsLong);
-        }else{
-          DetectConeLane::findSafeLocalPath(shortSide, longSide, leftIsLong);
-        }
+      if(longSide.rows() > 1 && !m_memoryInitiated){
         m_memoryInitiated = true;
       }
 
       if(m_memoryInitiated){
-        Eigen::ArrayXXf newVirtualLong = DetectConeLane::movePath(m_latestVirtualLong);
-        Eigen::ArrayXXf newVirtualShort = DetectConeLane::movePath(m_latestVirtualShort);
-        DetectConeLane::sendMatchedContainer(newVirtualLong, newVirtualShort);
 
-        m_latestVirtualLong = newVirtualLong;
-        m_latestVirtualShort = newVirtualShort;
-      }
+        if(longSide.rows() > 1){ // Path can be updated
+          // findSafeLocalPath ends with storing the path in m_candidateVirtualLong and m_candidateVirtualShort
+          if(leftIsLong){
+            DetectConeLane::findSafeLocalPath(longSide, shortSide, leftIsLong);
+          }else{
+            DetectConeLane::findSafeLocalPath(shortSide, longSide, leftIsLong);
+          }
+
+          float angleOld = atan2f(m_latestVirtualLong(m_latestVirtualLong.rows()-1,1)-m_latestVirtualLong(0,1),m_latestVirtualLong(m_latestVirtualLong.rows()-1,0)-m_latestVirtualLong(0,0));
+          float angleNew = atan2f(m_candidateVirtualLong(m_candidateVirtualLong.rows()-1,1)-m_candidateVirtualLong(0,1),m_candidateVirtualLong(m_candidateVirtualLong.rows()-1,0)-m_candidateVirtualLong(0,0));
+          float angleDiff = abs(angleOld-angleNew);
+
+          if(angleDiff < 5*DEG2RAD){ // Less than 5 degrees difference, accepted
+
+            m_latestVirtualLong.resize(m_candidateVirtualLong.rows(),m_candidateVirtualLong.cols());
+            m_latestVirtualShort.resize(m_candidateVirtualShort.rows(),m_candidateVirtualShort.cols());
+            m_latestVirtualLong = m_candidateVirtualLong;
+            m_latestVirtualShort = m_candidateVirtualShort;
+
+            // Having a doubled first point is the signal to the next module that the path has been updated.
+            Eigen::ArrayXXf tmpVirtualLong(m_latestVirtualLong.rows()+1, m_latestVirtualLong.cols());
+            Eigen::ArrayXXf tmpVirtualShort(m_latestVirtualShort.rows()+1, m_latestVirtualShort.cols());
+
+            tmpVirtualLong.bottomRows(m_latestVirtualLong.rows()) = m_latestVirtualLong;
+            tmpVirtualShort.bottomRows(m_latestVirtualShort.rows()) = m_latestVirtualShort;
+            tmpVirtualLong.row(0) = tmpVirtualLong.row(1);
+            tmpVirtualShort.row(0) = tmpVirtualShort.row(1);
+
+            DetectConeLane::sendMatchedContainer(tmpVirtualLong, tmpVirtualShort);
+
+          }else{ // Angle difference too large, use memory instead
+            Eigen::ArrayXXf newVirtualLong = DetectConeLane::movePath(m_latestVirtualLong);
+            Eigen::ArrayXXf newVirtualShort = DetectConeLane::movePath(m_latestVirtualShort);
+            DetectConeLane::sendMatchedContainer(newVirtualLong, newVirtualShort);
+
+            m_latestVirtualLong = newVirtualLong;
+            m_latestVirtualShort = newVirtualShort;
+          }
+
+        }else{ // Path cannot be updated, use memory instead
+
+          Eigen::ArrayXXf newVirtualLong = DetectConeLane::movePath(m_latestVirtualLong);
+          Eigen::ArrayXXf newVirtualShort = DetectConeLane::movePath(m_latestVirtualShort);
+          DetectConeLane::sendMatchedContainer(newVirtualLong, newVirtualShort);
+
+          m_latestVirtualLong = newVirtualLong;
+          m_latestVirtualShort = newVirtualShort;
+        }
+      } // End of memory initiated
 
     } // End of usePathMemory
   } // End of send mutex
@@ -749,8 +787,8 @@ void DetectConeLane::findSafeLocalPath(Eigen::ArrayXXf sidePointsLeft, Eigen::Ar
   } // End of else
 
   if(m_usePathMemory){
-    m_latestVirtualLong = virtualPointsLongFinal;
-    m_latestVirtualShort = virtualPointsShortFinal;
+    m_candidateVirtualLong = virtualPointsLongFinal;
+    m_candidateVirtualShort = virtualPointsShortFinal;
   }else{
     DetectConeLane::sendMatchedContainer(virtualPointsLongFinal, virtualPointsShortFinal);
   }

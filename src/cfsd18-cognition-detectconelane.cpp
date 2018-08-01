@@ -55,7 +55,7 @@ int32_t main(int32_t argc, char **argv) {
     uint32_t slamStamp = (commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120);
     uint32_t attentionStamp = (commandlineArguments.count("attentionId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["attentionId"]))):(116);
     uint32_t simDetectconeStamp = (commandlineArguments.count("simDetectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["simDetectConeId"]))):(231);
-    uint32_t yawRateStamp = (commandlineArguments.count("yawRateId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["yawRateId"]))):(114);
+    uint32_t yawRateStamp = (commandlineArguments.count("yawRateId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["yawRateId"]))):(112);
     uint32_t gpsId = (commandlineArguments.count("gpsId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["gpsId"]))):(114);
     bool useRawGPS = (commandlineArguments["useRawGPS"].size() != 0) ? (std::stoi(commandlineArguments["useRawGPS"])==1) : (false);
     uint32_t gpsStamp = (useRawGPS) ? (108) : (gpsId);

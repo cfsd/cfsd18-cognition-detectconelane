@@ -111,6 +111,8 @@ class DetectConeLane {
   bool m_noConesReceived;
   bool m_usePathMemory;
   bool m_memoryInitiated;
+  Eigen::ArrayXXf m_candidateVirtualLong;
+  Eigen::ArrayXXf m_candidateVirtualShort;
   Eigen::ArrayXXf m_latestVirtualLong;
   Eigen::ArrayXXf m_latestVirtualShort;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
