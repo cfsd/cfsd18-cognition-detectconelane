@@ -77,6 +77,7 @@ class DetectConeLane {
   int m_nLapsToGo;
   int m_lapCounterLockTime;
   std::chrono::time_point<std::chrono::system_clock> m_latestLapIncrease;
+  bool m_useOrangeLapCounter;
   int m_nOrange;
   bool m_orangeVisibleInLatestFrame;
   bool m_useNewConeLapCounter;
@@ -98,6 +99,7 @@ class DetectConeLane {
   float m_lengthSeparationMargin;
   bool m_useRawGPS;
   std::array<double,2> m_gpsReference;
+  bool m_useGpsLapCounter;
   Eigen::Vector2d m_globalPos;
   bool m_finishFound;
   Eigen::Vector2d m_finishPos;

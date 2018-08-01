@@ -39,6 +39,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_nLapsToGo{(commandlineArguments["nLapsToGo"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nLapsToGo"]))) : (10)}
 , m_lapCounterLockTime{(commandlineArguments["lapCounterLockTime"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["lapCounterLockTime"]))) : (10)}
 , m_latestLapIncrease{std::chrono::system_clock::now()}
+, m_useOrangeLapCounter{(commandlineArguments["useOrangeLapCounter"].size() != 0) ? (std::stoi(commandlineArguments["useOrangeLapCounter"])==1) : (true)}
 , m_nOrange{0}
 , m_orangeVisibleInLatestFrame{false}
 , m_useNewConeLapCounter{(commandlineArguments["useNewConeLapCounter"].size() != 0) ? (std::stoi(commandlineArguments["useNewConeLapCounter"])==1) : (true)}
@@ -60,6 +61,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_lengthSeparationMargin{(commandlineArguments["lengthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["lengthSeparationMargin"]))) : (1.0f)}
 , m_useRawGPS{(commandlineArguments["useRawGPS"].size() != 0) ? (std::stoi(commandlineArguments["useRawGPS"])==1) : (false)}
 , m_gpsReference()
+, m_useGpsLapCounter{(commandlineArguments["useGpsLapCounter"].size() != 0) ? (std::stoi(commandlineArguments["useGpsLapCounter"])==1) : (true)}
 , m_globalPos()
 , m_finishFound{false}
 , m_finishPos{}
@@ -149,7 +151,7 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
   bool nearFinishInThisFrame = (m_finishPos - m_globalPos).norm() < m_finishRadius;
   if(!nearFinishInThisFrame && m_nearFinishInLatestFrame){
     std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
-    if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
+    if(m_useGpsLapCounter && timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
       m_lapCounter++;
       m_latestLapIncrease = std::chrono::system_clock::now();
       DetectConeLane::sendLapMessage(m_lapCounter);
@@ -335,7 +337,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
       // If two big orange cones disappear from view the counter is increased. The finish line position is also updated if possible.
       if(!orangeVisibleInThisFrame && m_orangeVisibleInLatestFrame){
         std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
-        if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
+        if(m_useOrangeLapCounter && timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
           m_lapCounter++;
           m_latestLapIncrease = std::chrono::system_clock::now();
           DetectConeLane::sendLapMessage(m_lapCounter);
@@ -375,7 +377,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
           m_disappearanceFramesInARow = 0;
           m_countDisappearanceFrames = false;
           std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
-          if(timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
+          if(m_useOrangeLapCounter && timeSinceLatestLapIncrease.count() > m_lapCounterLockTime){
             m_lapCounter++;
             m_latestLapIncrease = std::chrono::system_clock::now();
             DetectConeLane::sendLapMessage(m_lapCounter);
