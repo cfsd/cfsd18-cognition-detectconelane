@@ -39,6 +39,8 @@ class DetectConeLane {
   virtual ~DetectConeLane();
   void nextPos(cluon::data::Envelope);
   void nextOrange(cluon::data::Envelope);
+  void nextYawRate(cluon::data::Envelope);
+  void nextGroundSpeed(cluon::data::Envelope);
   void receiveCombinedMessage(std::map<int,ConePackage>, cluon::data::TimeStamp);
 
  private:
@@ -59,6 +61,7 @@ class DetectConeLane {
   float findFactorToClosestPoint(Eigen::ArrayXXf, Eigen::ArrayXXf, Eigen::ArrayXXf);
   void sendMatchedContainer(Eigen::ArrayXXf, Eigen::ArrayXXf);
   void sendLapMessage(int);
+  Eigen::ArrayXXf movePath(Eigen::ArrayXXf);
 
   cluon::OD4Session &m_od4;
   cluon::OD4Session &m_od4Lap;
@@ -93,6 +96,7 @@ class DetectConeLane {
   float m_widthSeparationMargin;
   float m_maxConeLengthSeparation;
   float m_lengthSeparationMargin;
+  bool m_useRawGPS;
   std::array<double,2> m_gpsReference;
   Eigen::Vector2d m_globalPos;
   bool m_finishFound;
@@ -100,13 +104,18 @@ class DetectConeLane {
   double m_finishRadius;
   bool m_nearFinishInLatestFrame;
   bool m_globalPosReceived;
+  double m_yawRate;
+  double m_groundSpeed;
   bool m_noConesReceived;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   cluon::data::TimeStamp m_sampleTime;
+  cluon::data::TimeStamp m_previousTimeStamp;
   bool m_newClock;
   std::mutex m_posMutex;
   std::mutex m_orangeMutex;
+  std::mutex m_yawMutex;
+  std::mutex m_speedMutex;
   std::mutex m_timeStampMutex;
   std::mutex m_sendMutex;
   const double DEG2RAD = 0.017453292522222; // PI/180.0

@@ -57,6 +57,7 @@ int32_t main(int32_t argc, char **argv) {
     uint32_t simDetectconeStamp = (commandlineArguments.count("simDetectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["simDetectConeId"]))):(231);
     uint32_t estimationDefault = (accelerationMode)?(112):(114);
     uint32_t estimationStamp = (commandlineArguments.count("estimationId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["estimationId"]))):(estimationDefault);
+    uint32_t speedStamp = 114;
     uint32_t id = (commandlineArguments.count("id")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["id"]))):(211);
 
     auto poseEnvelope{[&detectconelane,senderStamp = estimationStamp](cluon::data::Envelope &&envelope)
@@ -74,6 +75,22 @@ int32_t main(int32_t argc, char **argv) {
           detectconelane.nextOrange(envelope);
         }
       } 
+    };
+
+    auto yawRateEnvelope{[&detectconelane, senderStamp = estimationStamp](cluon::data::Envelope &&envelope)
+      {
+        if(envelope.senderStamp() == senderStamp){
+          detectconelane.nextYawRate(envelope);
+        }
+      }
+    };
+
+    auto groundSpeedEnvelope{[&detectconelane, senderStamp = speedStamp](cluon::data::Envelope &&envelope)
+      {
+        if(envelope.senderStamp() == senderStamp){
+          detectconelane.nextGroundSpeed(envelope);
+        }
+      }
     };
 
     auto pointEnvelope{[&attentionStamp, &simDetectconeStamp, &collector](cluon::data::Envelope &&envelope)
@@ -98,9 +115,11 @@ int32_t main(int32_t argc, char **argv) {
     };
 
     if(accelerationMode){
-      // Direction and distance from attention or simulation
+      // Direction and distance from attention or simulation. Ground speed and yaw rate from UKF.
       od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),pointEnvelope);
       od4.dataTrigger(opendlv::logic::perception::ObjectDistance::ID(),pointEnvelope);
+      od4.dataTrigger(opendlv::proxy::AngularVelocityReading::ID(),yawRateEnvelope);
+      od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),groundSpeedEnvelope);
     }else{
       // Direction, distance and type from either detectcone, slam or simulation
       od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),coneEnvelope);

@@ -58,6 +58,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_widthSeparationMargin{(commandlineArguments["widthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["widthSeparationMargin"]))) : (1.0f)}
 , m_maxConeLengthSeparation{(commandlineArguments["maxConeLengthSeparation"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["maxConeLengthSeparation"]))) : (5.0f)}
 , m_lengthSeparationMargin{(commandlineArguments["lengthSeparationMargin"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["lengthSeparationMargin"]))) : (1.0f)}
+, m_useRawGPS{(commandlineArguments["useRawGPS"].size() != 0) ? (std::stoi(commandlineArguments["useRawGPS"])==1) : (false)}
 , m_gpsReference()
 , m_globalPos()
 , m_finishFound{false}
@@ -65,13 +66,18 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_finishRadius{}
 , m_nearFinishInLatestFrame{false}
 , m_globalPosReceived{false}
+, m_yawRate{0.0}
+, m_groundSpeed{0.0}
 , m_noConesReceived{false}
 , m_tick{}
 , m_tock{}
 , m_sampleTime{}
+, m_previousTimeStamp{}
 , m_newClock{true}
 , m_posMutex()
 , m_orangeMutex()
+, m_yawMutex()
+, m_speedMutex()
 , m_timeStampMutex()
 , m_sendMutex()
 {
@@ -104,8 +110,8 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
   std::unique_lock<std::mutex> lockPos(m_posMutex);
   auto odometry = cluon::extractMessage<opendlv::logic::sensation::Geolocation>(std::move(data));
 
-  if(m_accelerationMode){
-    // In acceleration we listen to raw GPS data and need to convert to cartesian
+  if(m_useRawGPS){
+    // If we listen to raw GPS data we need to convert to cartesian
     double longitude = odometry.longitude();
     double latitude = odometry.latitude();
 
@@ -121,14 +127,17 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
     m_globalPos << odometry.longitude(),
                    odometry.latitude();
   }
-  m_globalPosReceived = true;
-  if(!m_finishFound){
-    m_finishFound = true;
-    m_finishPos = m_globalPos;
-    if(m_accelerationMode){
-      m_finishRadius = 75.0;
-    }else{
-      m_finishRadius = 6.0;
+
+  if(m_globalPos(0) > 0 && m_globalPos(1) > 0){
+    m_globalPosReceived = true;
+    if(!m_finishFound){
+      m_finishFound = true;
+      m_finishPos = m_globalPos;
+      if(m_accelerationMode){
+        m_finishRadius = 75.0;
+      }else{
+        m_finishRadius = 6.0;
+      }
     }
   }
 
@@ -156,11 +165,30 @@ void DetectConeLane::nextOrange(cluon::data::Envelope data){
 } // End of nextOrange
 
 
+void DetectConeLane::nextYawRate(cluon::data::Envelope data){
+  std::lock_guard<std::mutex> lockYaw(m_yawMutex);
+  auto yawRate = cluon::extractMessage<opendlv::proxy::AngularVelocityReading>(std::move(data));
+  m_yawRate = yawRate.angularVelocityZ();
+} // End of nextYawRate
+
+
+void DetectConeLane::nextGroundSpeed(cluon::data::Envelope data){
+  std::lock_guard<std::mutex> lockGroundSpeed(m_speedMutex);
+  auto groundSpeed = cluon::extractMessage<opendlv::proxy::GroundSpeedReading>(std::move(data));
+  m_groundSpeed = groundSpeed.groundSpeed();
+} // End of nextGroundSpeed
+
+
 void DetectConeLane::receiveCombinedMessage(std::map<int,ConePackage> currentFrame, cluon::data::TimeStamp sampleTime){
 
   m_tick = std::chrono::system_clock::now();
   {
     std::unique_lock<std::mutex> lockPos(m_timeStampMutex);
+    if(m_isRunning){
+      m_previousTimeStamp = m_sampleTime;
+    }else{
+      m_previousTimeStamp = sampleTime;
+    }
     m_sampleTime = sampleTime;
   }
 
@@ -1149,3 +1177,35 @@ void DetectConeLane::sendLapMessage(int lapsCompleted){
   lapMessage.state(lapsCompleted);
   m_od4Lap.send(lapMessage, sampleTimeCopy, 666);
 } // End of sendLapMessage
+
+
+Eigen::ArrayXXf DetectConeLane::movePath(Eigen::ArrayXXf latestPath){
+  double delta;
+  double rotation;
+  double speed;
+  {
+    std::unique_lock<std::mutex> lockPos(m_timeStampMutex);
+    delta = cluon::time::deltaInMicroseconds(m_sampleTime,m_previousTimeStamp)/1000000.0;
+  }
+  {
+  std::lock_guard<std::mutex> lockYaw(m_yawMutex);
+  rotation = m_yawRate*delta;
+  }
+  {
+  std::lock_guard<std::mutex> lockGroundSpeed(m_speedMutex);
+  speed = m_groundSpeed*delta;
+  }
+  Eigen::ArrayXXf nextPath = latestPath;
+  if(fabs(speed)>0.001 && fabs(rotation)>0.00001){
+    for(int i = 0 ; i < nextPath.rows() ; i++){
+      double x = latestPath(i,0);
+      double y = latestPath(i,1);
+      double newX = x*cos(-rotation)-y*sin(-rotation);
+      double newY = y*cos(-rotation)+x*sin(-rotation);
+      newX = newX-speed;
+      nextPath(i,0) = static_cast<float>(newX);
+      nextPath(i,1) = static_cast<float>(newY);
+    }
+  }
+  return nextPath;
+} // End of movePath
