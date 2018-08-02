@@ -59,7 +59,8 @@ int32_t main(int32_t argc, char **argv) {
     uint32_t gpsId = (commandlineArguments.count("gpsId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["gpsId"]))):(114);
     bool useRawGPS = (commandlineArguments["useRawGPS"].size() != 0) ? (std::stoi(commandlineArguments["useRawGPS"])==1) : (false);
     uint32_t gpsStamp = (useRawGPS) ? (108) : (gpsId);
-    uint32_t speedStamp = (commandlineArguments.count("speedId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["speedId"]))):(114);
+    uint32_t const speedId1=(commandlineArguments["speedId1"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["speedId1"])) : (0);
+    uint32_t const speedId2=(commandlineArguments["speedId2"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["speedId2"])) : (0);
     uint32_t id = (commandlineArguments.count("id")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["id"]))):(211);
 
     auto poseEnvelope{[&detectconelane,senderStamp = gpsStamp](cluon::data::Envelope &&envelope)
@@ -67,7 +68,7 @@ int32_t main(int32_t argc, char **argv) {
         if(envelope.senderStamp() == senderStamp){
           detectconelane.nextPos(envelope);
         }
-      } 
+      }
     };
 
     auto orangeEnvelope{[&detectconelane, &detectconeStamp, &simDetectconeStamp](cluon::data::Envelope &&envelope)
@@ -76,7 +77,7 @@ int32_t main(int32_t argc, char **argv) {
         if(sender == detectconeStamp || sender == simDetectconeStamp){
           detectconelane.nextOrange(envelope);
         }
-      } 
+      }
     };
 
     auto yawRateEnvelope{[&detectconelane, senderStamp = yawRateStamp](cluon::data::Envelope &&envelope)
@@ -87,9 +88,9 @@ int32_t main(int32_t argc, char **argv) {
       }
     };
 
-    auto groundSpeedEnvelope{[&detectconelane, senderStamp = speedStamp](cluon::data::Envelope &&envelope)
+    auto groundSpeedEnvelope{[&detectconelane, speedId1, speedId2](cluon::data::Envelope &&envelope)
       {
-        if(envelope.senderStamp() == senderStamp){
+        if(envelope.senderStamp() == speedId1 || envelope.senderStamp() == speedId2){
           detectconelane.nextGroundSpeed(envelope);
         }
       }
@@ -118,6 +119,7 @@ int32_t main(int32_t argc, char **argv) {
 
     if(accelerationMode){
       // Direction and distance from attention or simulation. Ground speed and yaw rate from UKF.
+      od4Lap.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),groundSpeedEnvelope);
       od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),pointEnvelope);
       od4.dataTrigger(opendlv::logic::perception::ObjectDistance::ID(),pointEnvelope);
       od4.dataTrigger(opendlv::proxy::AngularVelocityReading::ID(),yawRateEnvelope);

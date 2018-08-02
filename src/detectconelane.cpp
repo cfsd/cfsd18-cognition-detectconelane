@@ -22,11 +22,13 @@
 #include <mutex>
 #include <condition_variable>
 #include "detectconelane.hpp"
-#include "WGS84toCartesian.hpp" 
+#include "WGS84toCartesian.hpp"
 
 DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4, cluon::OD4Session &od4Lap) :
   m_od4(od4)
 , m_od4Lap(od4Lap)
+, m_speedId1{(commandlineArguments["speedId1"].size() != 0) ? (static_cast<uint32_t>(std::stoi(commandlineArguments["speedId1"]))) : (1504)}
+, m_speedId2{(commandlineArguments["speedId2"].size() != 0) ? (static_cast<uint32_t>(std::stoi(commandlineArguments["speedId2"]))) : (0)}
 , m_senderStamp{(commandlineArguments["id"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["id"]))) : (211)}
 , m_detectconeStamp{(commandlineArguments.count("detectConeId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["detectConeId"]))):(118)}
 , m_slamStamp{(commandlineArguments.count("slamId")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"]))):(120)}
@@ -92,13 +94,15 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_speedMutex()
 , m_timeStampMutex()
 , m_sendMutex()
+, m_groundSpeedReadingLeft{0.0f}
+, m_groundSpeedReadingRight{0.0f}
 {
   /*std::cout<<"DetectConeLane set up with "<<commandlineArguments.size()<<" commandlineArguments: "<<std::endl;
   for (std::map<std::string, std::string >::iterator it = commandlineArguments.begin();it !=commandlineArguments.end();it++){
     std::cout<<it->first<<" "<<it->second<<std::endl;
   }*/
 
-  // Default gps reference is set to the docks near Revere 
+  // Default gps reference is set to the docks near Revere
   m_gpsReference[0] = (commandlineArguments["refLatitude"].size() != 0) ? (static_cast<double>(std::stod(commandlineArguments["refLatitude"]))):(57.710482);
   m_gpsReference[1] = (commandlineArguments["refLongitude"].size() != 0) ? static_cast<double>(std::stod(commandlineArguments["refLongitude"])):(11.950813);
 }
@@ -185,9 +189,19 @@ void DetectConeLane::nextYawRate(cluon::data::Envelope data){
 
 
 void DetectConeLane::nextGroundSpeed(cluon::data::Envelope data){
-  std::lock_guard<std::mutex> lockGroundSpeed(m_speedMutex);
-  auto groundSpeed = cluon::extractMessage<opendlv::proxy::GroundSpeedReading>(std::move(data));
-  m_groundSpeed = groundSpeed.groundSpeed();
+  std::unique_lock<std::mutex> lockGroundSpeed(m_speedMutex);
+  auto vehicleSpeed = cluon::extractMessage<opendlv::proxy::GroundSpeedReading>(std::move(data));
+  if (m_speedId2>0) {
+    if(data.senderStamp()==m_speedId1){
+      m_groundSpeedReadingLeft = vehicleSpeed.groundSpeed();
+    } else if (data.senderStamp()==m_speedId2){
+      m_groundSpeedReadingRight = vehicleSpeed.groundSpeed();
+    }
+    m_groundSpeed = (m_groundSpeedReadingLeft + m_groundSpeedReadingRight)*0.5f;
+  }
+  else {
+    m_groundSpeed = vehicleSpeed.groundSpeed();
+  }
 } // End of nextGroundSpeed
 
 
