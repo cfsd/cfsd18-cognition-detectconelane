@@ -391,7 +391,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
           if(m_globalPosReceived){
             std::unique_lock<std::mutex> lockPos(m_posMutex);
             m_finishPos = m_globalPos;
-            m_finishRadius = 2.0;
+            m_finishRadius = m_trackGpsTolerance;
             m_finishFound = true;
           }
         }
