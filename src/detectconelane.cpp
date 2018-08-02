@@ -62,6 +62,8 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_useRawGPS{(commandlineArguments["useRawGPS"].size() != 0) ? (std::stoi(commandlineArguments["useRawGPS"])==1) : (false)}
 , m_gpsReference()
 , m_useGpsLapCounter{(commandlineArguments["useGpsLapCounter"].size() != 0) ? (std::stoi(commandlineArguments["useGpsLapCounter"])==1) : (true)}
+, m_accGpsFinishDistance{(commandlineArguments["accGpsFinishDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["accGpsFinishDistance"]))) : (75.0f)}
+, m_trackGpsTolerance{(commandlineArguments["trackGpsTolerance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["trackGpsTolerance"]))) : (2.0f)}
 , m_globalPos()
 , m_finishFound{false}
 , m_finishPos{}
@@ -143,7 +145,7 @@ void DetectConeLane::nextPos(cluon::data::Envelope data){
       m_finishFound = true;
       m_finishPos = m_globalPos;
       if(m_accelerationMode){
-        m_finishRadius = 75.0;
+        m_finishRadius = m_accGpsFinishDistance;
       }else{
         m_finishRadius = 6.0;
       }
@@ -348,7 +350,7 @@ void DetectConeLane::sortIntoSideArrays(Eigen::ArrayXXf extractedCones, int nLef
         if(m_globalPosReceived){
           std::unique_lock<std::mutex> lockPos(m_posMutex);
           m_finishPos = m_globalPos;
-          m_finishRadius = 2.0;
+          m_finishRadius = m_trackGpsTolerance;
           m_finishFound = true;
         }
       }
