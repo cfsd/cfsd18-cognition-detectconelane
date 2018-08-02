@@ -67,7 +67,7 @@ int32_t main(int32_t argc, char **argv) {
         if(envelope.senderStamp() == senderStamp){
           detectconelane.nextPos(envelope);
         }
-      } 
+      }
     };
 
     auto orangeEnvelope{[&detectconelane, &detectconeStamp, &simDetectconeStamp](cluon::data::Envelope &&envelope)
@@ -76,7 +76,7 @@ int32_t main(int32_t argc, char **argv) {
         if(sender == detectconeStamp || sender == simDetectconeStamp){
           detectconelane.nextOrange(envelope);
         }
-      } 
+      }
     };
 
     auto yawRateEnvelope{[&detectconelane, senderStamp = yawRateStamp](cluon::data::Envelope &&envelope)
@@ -118,6 +118,7 @@ int32_t main(int32_t argc, char **argv) {
 
     if(accelerationMode){
       // Direction and distance from attention or simulation. Ground speed and yaw rate from UKF.
+      od4Lap.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),groundSpeedEnvelope);
       od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),pointEnvelope);
       od4.dataTrigger(opendlv::logic::perception::ObjectDistance::ID(),pointEnvelope);
       od4.dataTrigger(opendlv::proxy::AngularVelocityReading::ID(),yawRateEnvelope);
