@@ -65,6 +65,8 @@ class DetectConeLane {
 
   cluon::OD4Session &m_od4;
   cluon::OD4Session &m_od4Lap;
+  uint32_t m_speedId1{1504};
+  uint32_t m_speedId2{0};
   int m_senderStamp;
   uint32_t m_detectconeStamp;
   uint32_t m_slamStamp;
@@ -129,6 +131,8 @@ class DetectConeLane {
   std::mutex m_speedMutex;
   std::mutex m_timeStampMutex;
   std::mutex m_sendMutex;
+  float m_groundSpeedReadingLeft;
+  float m_groundSpeedReadingRight;
   const double DEG2RAD = 0.017453292522222; // PI/180.0
 
 };
