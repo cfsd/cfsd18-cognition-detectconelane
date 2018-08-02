@@ -40,6 +40,7 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_lapCounter{0}
 , m_nLapsToGo{(commandlineArguments["nLapsToGo"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nLapsToGo"]))) : (10)}
 , m_lapCounterLockTime{(commandlineArguments["lapCounterLockTime"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["lapCounterLockTime"]))) : (10)}
+, m_stopSignalDelay{(commandlineArguments["stopSignalDelay"].size() != 0) ? (static_cast<double>(std::stod(commandlineArguments["stopSignalDelay"]))) : (0.0)}
 , m_latestLapIncrease{std::chrono::system_clock::now()}
 , m_useOrangeLapCounter{(commandlineArguments["useOrangeLapCounter"].size() != 0) ? (std::stoi(commandlineArguments["useOrangeLapCounter"])==1) : (true)}
 , m_nOrange{0}
@@ -493,11 +494,12 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
   {
     std::unique_lock<std::mutex> lockSend(m_sendMutex);
 
-    if(m_lapCounter > m_nLapsToGo-1){
+    std::chrono::duration<double> timeSinceLatestLapIncrease = std::chrono::system_clock::now() - m_latestLapIncrease;
+    if(m_lapCounter > m_nLapsToGo-1 && timeSinceLatestLapIncrease.count() > m_stopSignalDelay){
       opendlv::logic::perception::GroundSurfaceProperty surfaceProperty;
       surfaceProperty.surfaceId(0);
       surfaceProperty.property("STOP");
-      m_od4.send(surfaceProperty, sampleTimeCopy , m_senderStamp);
+      m_od4.send(surfaceProperty, sampleTimeCopy, m_senderStamp);
     }
 
     if(!m_usePathMemory){

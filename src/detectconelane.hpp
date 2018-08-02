@@ -78,6 +78,7 @@ class DetectConeLane {
   int m_lapCounter;
   int m_nLapsToGo;
   int m_lapCounterLockTime;
+  double m_stopSignalDelay;
   std::chrono::time_point<std::chrono::system_clock> m_latestLapIncrease;
   bool m_useOrangeLapCounter;
   int m_nOrange;
