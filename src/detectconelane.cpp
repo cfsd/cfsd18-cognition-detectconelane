@@ -66,6 +66,8 @@ DetectConeLane::DetectConeLane(std::map<std::string, std::string> commandlineArg
 , m_gpsReference()
 , m_useGpsLapCounter{(commandlineArguments["useGpsLapCounter"].size() != 0) ? (std::stoi(commandlineArguments["useGpsLapCounter"])==1) : (true)}
 , m_accGpsFinishDistance{(commandlineArguments["accGpsFinishDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["accGpsFinishDistance"]))) : (75.0f)}
+, m_accMinPathLength{(commandlineArguments["accMinPathLength"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["accMinPathLength"]))) : (3.0f)}
+, m_accMaxUpdateAngleDeg{(commandlineArguments["accMaxUpdateAngleDeg"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["accMaxUpdateAngleDeg"]))) : (5.0f)}
 , m_trackGpsTolerance{(commandlineArguments["trackGpsTolerance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["trackGpsTolerance"]))) : (2.0f)}
 , m_globalPos()
 , m_finishFound{false}
@@ -589,13 +591,16 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
     }
     else // Use path memory
     {
-      if(longSide.rows() > 1 && !m_memoryInitiated){
+      float sideLength1 = DetectConeLane::findTotalPathLength(longSide);
+      float sideLength2 = DetectConeLane::findTotalPathLength(shortSide);
+
+      if(sideLength1 > m_accMinPathLength && sideLength2 > m_accMinPathLength && !m_memoryInitiated){
         m_memoryInitiated = true;
       }
 
       if(m_memoryInitiated){
 
-        if(longSide.rows() > 1){ // Path can be updated
+        if(sideLength1 > m_accMinPathLength && sideLength2 > m_accMinPathLength){ // Path can be updated
           // findSafeLocalPath ends with storing the path in m_candidateVirtualLong and m_candidateVirtualShort
           if(leftIsLong){
             DetectConeLane::findSafeLocalPath(longSide, shortSide, leftIsLong);
@@ -617,7 +622,7 @@ void DetectConeLane::generateSurfaces(Eigen::ArrayXXf sideLeft, Eigen::ArrayXXf 
           float angleNewShort = atan2f(m_candidateVirtualShort(m_candidateVirtualShort.rows()-1,1)-m_candidateVirtualShort(0,1),m_candidateVirtualShort(m_candidateVirtualShort.rows()-1,0)-m_candidateVirtualShort(0,0));
           float angleDiffShort = static_cast<float>(fabs(angleOldShort-angleNewShort));
 
-          if(angleDiffLong < 5.0f*static_cast<float>(DEG2RAD) && angleDiffShort < 5.0f*static_cast<float>(DEG2RAD)){ // Less than 5 degrees difference, accepted
+          if(angleDiffLong < m_accMaxUpdateAngleDeg*static_cast<float>(DEG2RAD) && angleDiffShort < m_accMaxUpdateAngleDeg*static_cast<float>(DEG2RAD)){ // Less than 5 degrees difference, accepted
 
             m_latestVirtualLong.resize(m_candidateVirtualLong.rows(),m_candidateVirtualLong.cols());
             m_latestVirtualShort.resize(m_candidateVirtualShort.rows(),m_candidateVirtualShort.cols());

@@ -104,6 +104,8 @@ class DetectConeLane {
   std::array<double,2> m_gpsReference;
   bool m_useGpsLapCounter;
   float m_accGpsFinishDistance;
+  float m_accMinPathLength;
+  float m_accMaxUpdateAngleDeg;
   float m_trackGpsTolerance;
   Eigen::Vector2d m_globalPos;
   bool m_finishFound;
