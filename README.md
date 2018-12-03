@@ -6,7 +6,7 @@
 - od4.dataTrigger: if recieving cone information, trigger collector.CollectorCones(); if recieving geolocation, trigger detectconelane.nextPos()
 - nextPos() will extract the global position (with longitude and latitude), and make some adjustment with gpsReference
 - collector will gather all cones in each frame, and then pass the frame to detectorlane
-- then cones are seperated into for categories: coneLeft, coneRight, coneSmall, coneBig; based on the corresponding type: blue, yellow, small orange, big orange
+- then cones are seperated into four categories: coneLeft, coneRight, coneSmall, coneBig; based on the corresponding type: blue, yellow, small orange, big orange
 - sort coneLeft and coneRight by the distance between cone and vehicle, from closest to furthest
 - compute the path length for each side by adding up the distance of adjacent cones, and decide which side has longer path
 - for the shorter path, insert some needed guessed cones if slam is not activated or the number of cones is not enough
